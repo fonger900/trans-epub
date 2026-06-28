@@ -11,3 +11,6 @@ dependencies = [
     "requests>=2.32",
     "python-dotenv>=1.0",
 ]
+
+[project.scripts]
+trans-epub = "main:main"
