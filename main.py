@@ -154,7 +154,17 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
     if not nodes:
         return html_bytes, 0
 
-    texts = [n.get_text() for n in nodes]
+    text_nodes = []
+    for node in nodes:
+        for child in node.find_all(string=True):
+            text = str(child)
+            if text.strip():
+                text_nodes.append(child)
+
+    if not text_nodes:
+        return html_bytes, 0
+
+    texts = [str(n) for n in text_nodes]
     char_count = sum(len(t) for t in texts)
     translated_all: list[str] = []
     batch, batch_len = [], 0
@@ -172,8 +182,8 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
             time.sleep(delay)
         translated_all.extend(translate_fn(batch))
 
-    for node, translated in zip(nodes, translated_all):
-        node.string = translated
+    for node, translated in zip(text_nodes, translated_all):
+        node.replace_with(translated)
     return soup.encode("utf-8"), char_count
 
 
