@@ -187,6 +187,40 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
     return soup.encode("utf-8"), char_count
 
 
+def translate_toc_and_nav(book: epub.EpubBook, engine: str) -> None:
+    translate_fn, _, _, _ = ENGINES[engine]
+    titles = []
+    links = []
+
+    def walk_links(link_list):
+        for link in link_list:
+            if getattr(link, "title", None):
+                titles.append(link.title)
+                links.append(link)
+            if getattr(link, "content", None):
+                walk_links(link.content)
+
+    walk_links(book.toc or [])
+
+    if titles:
+        translated_titles = translate_fn(titles)
+        for link, translated in zip(links, translated_titles):
+            link.title = translated
+
+    for item in book.get_items():
+        if not isinstance(item, epub.EpubNav):
+            continue
+        content = item.get_content().decode("utf-8")
+        soup = BeautifulSoup(content, "html.parser")
+        for anchor in soup.find_all("a"):
+            text = anchor.get_text(strip=True)
+            if text:
+                anchor.string = text
+        translated_html, _ = translate_html(soup.encode("utf-8"), engine)
+        item.set_content(translated_html)
+        break
+
+
 def get_spine_items(book: epub.EpubBook) -> list:
     spine_ids = [idref for idref, _ in book.spine]
     by_id = {item.get_id(): item for item in book.get_items_of_type(ITEM_DOCUMENT)}
@@ -213,6 +247,8 @@ def translate_epub(input_path: str, output_path: str, engine: str,
         return
 
     print(f"Book has {total} chapter(s). Engine: {engine} (Threads: {threads})\n")
+
+    translate_toc_and_nav(book, engine)
     
     total_chars = 0
     total_chars_lock = threading.Lock()
