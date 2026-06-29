@@ -327,7 +327,7 @@ def translate_epub(input_path: str, output_path: str, engine: str,
     print(f"\nDone → {output_path}  (translated ~{total_chars:,} chars)")
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Translate EPUB EN→VI")
     parser.add_argument("input")
     parser.add_argument("output", nargs="?")
@@ -335,7 +335,7 @@ if __name__ == "__main__":
     parser.add_argument("--chapters", "-c", help="e.g. 1,3,5 or 2-6 or 1,3-5,8")
     parser.add_argument("--list", "-l", action="store_true")
     parser.add_argument("--threads", "-t", type=int, default=4, help="Number of parallel translation threads")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     out = args.output or args.input.replace(".epub", "_vi.epub")
     only = None
@@ -350,3 +350,8 @@ if __name__ == "__main__":
 
     engine = resolve_engine(args.engine)
     translate_epub(args.input, out, engine, only, list_only=args.list, threads=args.threads)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
