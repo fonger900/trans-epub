@@ -2,7 +2,7 @@
 EPUB EN→VI translator — supports Azure Translator and Google Gemini.
 Usage: python main.py input.epub [output.epub] [--engine azure|gemini]
 """
-import os, json, argparse, time, requests, threading
+import os, json, argparse, time, requests, threading, re
 from pathlib import Path
 from dotenv import load_dotenv
 from ebooklib import epub, ITEM_DOCUMENT
@@ -166,22 +166,35 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
     if not nodes:
         return html_bytes, 0
 
-    text_nodes = []
+    translation_segments: list[str] = []
+    node_groups: list[list[tuple]] = []
+
     for node in nodes:
+        entries: list[tuple] = []
         for child in node.find_all(string=True):
             text = str(child)
-            if text.strip():
-                text_nodes.append(child)
+            if not text.strip():
+                entries.append((child, None, text, "", ""))
+                continue
 
-    if not text_nodes:
+            match = re.match(r"^(\s*)(.*?)(\s*)$", text, flags=re.S)
+            if match:
+                prefix, core, suffix = match.groups()
+            else:
+                prefix, core, suffix = "", text, ""
+            entries.append((child, True, prefix, core, suffix))
+            translation_segments.append(core)
+        if entries:
+            node_groups.append(entries)
+
+    if not translation_segments:
         return html_bytes, 0
 
-    texts = [str(n) for n in text_nodes]
-    char_count = sum(len(t) for t in texts)
+    char_count = sum(len(t) for t in translation_segments)
     translated_all: list[str] = []
     batch, batch_len = [], 0
 
-    for text in texts:
+    for text in translation_segments:
         if (batch_len + len(text) > char_limit or len(batch) >= elem_limit) and batch:
             if delay:
                 time.sleep(delay)
@@ -194,8 +207,14 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
             time.sleep(delay)
         translated_all.extend(translate_fn(batch))
 
-    for node, translated in zip(text_nodes, translated_all):
-        node.replace_with(translated)
+    it = iter(translated_all)
+    for entries in node_groups:
+        for child, is_text, prefix, core, suffix in entries:
+            if not is_text:
+                continue
+            translated = next(it)
+            child.replace_with(f"{prefix}{translated}{suffix}")
+
     return soup.encode("utf-8"), char_count
 
 
