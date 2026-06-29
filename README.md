@@ -43,6 +43,10 @@ python main.py sach.epub -c 1,3-5,8  # kết hợp
 # Ép dùng engine cụ thể
 python main.py sach.epub --engine gemini
 python main.py sach.epub --engine azure
+
+# Chỉnh mức sáng tạo của model
+python main.py sach.epub --engine gemini --creativity 0.8
+python main.py sach.epub --engine deepseek --creativity 0.2
 ```
 
 ### Cấu hình nhanh
@@ -53,6 +57,7 @@ python main.py sach.epub --engine azure
   - `GEMINI_API_KEY`
   - `DEEPSEEK_API_KEY`
 - Nếu không chỉ định `--engine`, chương trình sẽ tự chọn engine đầu tiên có key hợp lệ.
+- `--creativity` điều chỉnh `temperature` cho Gemini và DeepSeek; bỏ qua để dùng mặc định của từng engine.
 
 ## Resume
 

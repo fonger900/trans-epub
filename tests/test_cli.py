@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 
 import main
 
@@ -18,6 +19,17 @@ class CliTests(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+
+    def test_main_forwards_creativity_option(self):
+        with patch.object(main, "translate_epub") as translate_epub:
+            main.main(["book.epub", "--engine", "gemini", "--creativity", "0.8"])
+
+        translate_epub.assert_called_once()
+        args, kwargs = translate_epub.call_args
+        self.assertEqual(args[0], "book.epub")
+        self.assertEqual(args[1], "book_vi.epub")
+        self.assertEqual(args[2], "gemini")
+        self.assertEqual(kwargs["creativity"], 0.8)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """
 EPUB EN→VI translator — supports Azure Translator and Google Gemini.
-Usage: python main.py input.epub [output.epub] [--engine azure|gemini]
+Usage: python main.py input.epub [output.epub] [--engine azure|gemini|deepseek] [--creativity N]
 """
 import os, json, argparse, time, requests, threading, re
 from pathlib import Path
@@ -21,6 +21,7 @@ TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}
 BLOCK_TAGS = TRANSLATE_TAGS  # tags that should not be nested inside each other
 PRESERVE_TAGS = {"table", "style", "script"}
 PRESERVE_CLASSES = {"note", "footnote"}
+DEFAULT_DEEPSEEK_CREATIVITY = 0.4
 
 # ── Azure ──────────────────────────────────────────────────────────────────────
 
@@ -67,8 +68,11 @@ def extract_translations(raw_json: str) -> list[str]:
 
 # ── Gemini ─────────────────────────────────────────────────────────────────────
 
-def gemini_translate(texts: list[str]) -> list[str]:
+def gemini_translate(texts: list[str], creativity: float | None = None) -> list[str]:
     key = os.environ["GEMINI_API_KEY"]
+    generation_config = {"responseMimeType": "application/json"}
+    if creativity is not None:
+        generation_config["temperature"] = creativity
     prompt = (
         "You are a professional literary translator. Translate the following consecutive paragraphs of a book from English to Vietnamese.\n"
         "Guidelines:\n"
@@ -83,9 +87,7 @@ def gemini_translate(texts: list[str]) -> list[str]:
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={key}",
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "responseMimeType": "application/json"
-                }
+                "generationConfig": generation_config,
             },
             timeout=120,
         )
@@ -103,8 +105,9 @@ def gemini_translate(texts: list[str]) -> list[str]:
 
 # ── DeepSeek ──────────────────────────────────────────────────────────────────
 
-def deepseek_translate(texts: list[str]) -> list[str]:
+def deepseek_translate(texts: list[str], creativity: float | None = None) -> list[str]:
     key = os.environ["DEEPSEEK_API_KEY"]
+    temperature = DEFAULT_DEEPSEEK_CREATIVITY if creativity is None else creativity
     prompt = (
         "You are a professional literary translator. Translate the following consecutive paragraphs of a book from English to Vietnamese.\n"
         "Guidelines:\n"
@@ -121,7 +124,7 @@ def deepseek_translate(texts: list[str]) -> list[str]:
             json={
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.4,
+                "temperature": temperature,
                 "max_tokens": 8192,
                 "response_format": {"type": "json_object"}
             },
@@ -158,8 +161,17 @@ def resolve_engine(engine: str) -> str:
     raise RuntimeError("No translation API key found. Set AZURE_TRANSLATOR_KEY, GEMINI_API_KEY, or DEEPSEEK_API_KEY.")
 
 
-def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
-    translate_fn, char_limit, elem_limit, delay = ENGINES[engine]
+def translate_texts(engine: str, texts: list[str], creativity: float | None = None) -> list[str]:
+    translate_fn, _, _, _ = ENGINES[engine]
+    if engine == "gemini":
+        return translate_fn(texts, creativity=creativity)
+    if engine == "deepseek":
+        return translate_fn(texts, creativity=creativity)
+    return translate_fn(texts)
+
+
+def translate_html(html_bytes: bytes, engine: str, creativity: float | None = None) -> tuple[bytes, int]:
+    _, char_limit, elem_limit, delay = ENGINES[engine]
     soup = BeautifulSoup(html_bytes, "lxml-xml")
 
     def should_preserve(tag) -> bool:
@@ -209,7 +221,7 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
         return " ".join(part.strip() for part in parts if part.strip())
 
     def translate_batch(batch_texts: list[str]) -> list[str]:
-        translated_batch = translate_fn(batch_texts)
+        translated_batch = translate_texts(engine, batch_texts, creativity=creativity)
         if len(translated_batch) == len(batch_texts):
             return translated_batch
         if len(batch_texts) == 1:
@@ -237,8 +249,7 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
     return soup.encode("utf-8"), char_count
 
 
-def translate_toc_and_nav(book: epub.EpubBook, engine: str) -> None:
-    translate_fn, _, _, _ = ENGINES[engine]
+def translate_toc_and_nav(book: epub.EpubBook, engine: str, creativity: float | None = None) -> None:
     titles = []
     links = []
 
@@ -253,7 +264,7 @@ def translate_toc_and_nav(book: epub.EpubBook, engine: str) -> None:
     walk_links(book.toc or [])
 
     if titles:
-        translated_titles = translate_fn(titles)
+        translated_titles = translate_texts(engine, titles, creativity=creativity)
         for link, translated in zip(links, translated_titles):
             link.title = translated
 
@@ -266,7 +277,7 @@ def translate_toc_and_nav(book: epub.EpubBook, engine: str) -> None:
             text = anchor.get_text(strip=True)
             if text:
                 anchor.string = text
-        translated_html, _ = translate_html(soup.encode("utf-8"), engine)
+        translated_html, _ = translate_html(soup.encode("utf-8"), engine, creativity=creativity)
         item.set_content(translated_html)
         break
 
@@ -278,7 +289,8 @@ def get_spine_items(book: epub.EpubBook) -> list:
 
 
 def translate_epub(input_path: str, output_path: str, engine: str,
-                   only_chapters: set[int] | None = None, list_only: bool = False, threads: int = 4) -> None:
+                   only_chapters: set[int] | None = None, list_only: bool = False,
+                   threads: int = 4, creativity: float | None = None) -> None:
     cache_path = Path(output_path + ".cache.json")
     cache: dict[str, str] = json.loads(cache_path.read_text()) if cache_path.exists() else {}
 
@@ -298,7 +310,7 @@ def translate_epub(input_path: str, output_path: str, engine: str,
 
     print(f"Book has {total} chapter(s). Engine: {engine} (Threads: {threads})\n")
 
-    translate_toc_and_nav(book, engine)
+    translate_toc_and_nav(book, engine, creativity=creativity)
     
     total_chars = 0
     total_chars_lock = threading.Lock()
@@ -334,7 +346,7 @@ def translate_epub(input_path: str, output_path: str, engine: str,
         safe_print(f"  [{i}/{total}] Translating: {name} ({len(original):,} bytes)...")
         
         try:
-            translated, chars = translate_html(original, engine)
+            translated, chars = translate_html(original, engine, creativity=creativity)
         except Exception as e:
             safe_print(f"  [{i}/{total}] ERROR translating {name}: {e}")
             raise e
@@ -373,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--chapters", "-c", help="e.g. 1,3,5 or 2-6 or 1,3-5,8")
     parser.add_argument("--list", "-l", action="store_true")
     parser.add_argument("--threads", "-t", type=int, default=4, help="Number of parallel translation threads")
+    parser.add_argument("--creativity", type=float, help="Model creativity/temperature for Gemini and DeepSeek")
     args = parser.parse_args(argv)
 
     out = args.output or args.input.replace(".epub", "_vi.epub")
@@ -387,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
                 only.add(int(part))
 
     engine = resolve_engine(args.engine)
-    translate_epub(args.input, out, engine, only, list_only=args.list, threads=args.threads)
+    translate_epub(args.input, out, engine, only, list_only=args.list, threads=args.threads, creativity=args.creativity)
     return 0
 
 
