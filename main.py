@@ -19,6 +19,8 @@ http_session.mount("http://", adapter)
 
 TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}
 BLOCK_TAGS = TRANSLATE_TAGS  # tags that should not be nested inside each other
+PRESERVE_TAGS = {"table", "style", "script"}
+PRESERVE_CLASSES = {"note", "footnote"}
 
 # ── Azure ──────────────────────────────────────────────────────────────────────
 
@@ -159,9 +161,21 @@ def resolve_engine(engine: str) -> str:
 def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
     translate_fn, char_limit, elem_limit, delay = ENGINES[engine]
     soup = BeautifulSoup(html_bytes, "lxml-xml")
+
+    def should_preserve(tag) -> bool:
+        for current in [tag, *tag.parents]:
+            if getattr(current, "name", None) in PRESERVE_TAGS:
+                return True
+            classes = current.get("class", []) if hasattr(current, "get") else []
+            if isinstance(classes, str):
+                classes = classes.split()
+            if any(cls in PRESERVE_CLASSES for cls in classes):
+                return True
+        return False
+
     nodes = [
         tag for tag in soup.find_all(TRANSLATE_TAGS)
-        if tag.get_text(strip=True) and not tag.find(BLOCK_TAGS)
+        if tag.get_text(strip=True) and not tag.find(BLOCK_TAGS) and not should_preserve(tag)
     ]
     if not nodes:
         return html_bytes, 0
