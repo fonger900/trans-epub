@@ -119,7 +119,7 @@ def deepseek_translate(texts: list[str]) -> list[str]:
             json={
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
+                "temperature": 0.4,
                 "max_tokens": 8192,
                 "response_format": {"type": "json_object"}
             },
@@ -166,15 +166,13 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
     if not nodes:
         return html_bytes, 0
 
-    translation_segments: list[str] = []
-    node_groups: list[list[tuple]] = []
+    text_nodes: list[tuple] = []
+    texts: list[str] = []
 
     for node in nodes:
-        entries: list[tuple] = []
         for child in node.find_all(string=True):
             text = str(child)
             if not text.strip():
-                entries.append((child, None, text, "", ""))
                 continue
 
             match = re.match(r"^(\s*)(.*?)(\s*)$", text, flags=re.S)
@@ -182,38 +180,45 @@ def translate_html(html_bytes: bytes, engine: str) -> tuple[bytes, int]:
                 prefix, core, suffix = match.groups()
             else:
                 prefix, core, suffix = "", text, ""
-            entries.append((child, True, prefix, core, suffix))
-            translation_segments.append(core)
-        if entries:
-            node_groups.append(entries)
 
-    if not translation_segments:
+            text_nodes.append((child, prefix, core, suffix))
+            texts.append(core)
+
+    if not texts:
         return html_bytes, 0
 
-    char_count = sum(len(t) for t in translation_segments)
+    char_count = sum(len(text) for text in texts)
     translated_all: list[str] = []
     batch, batch_len = [], 0
 
-    for text in translation_segments:
+    def collapse_translation(parts: list[str]) -> str:
+        return " ".join(part.strip() for part in parts if part.strip())
+
+    def translate_batch(batch_texts: list[str]) -> list[str]:
+        translated_batch = translate_fn(batch_texts)
+        if len(translated_batch) == len(batch_texts):
+            return translated_batch
+        if len(batch_texts) == 1:
+            return [collapse_translation(translated_batch)]
+
+        midpoint = len(batch_texts) // 2
+        return translate_batch(batch_texts[:midpoint]) + translate_batch(batch_texts[midpoint:])
+
+    for text in texts:
         if (batch_len + len(text) > char_limit or len(batch) >= elem_limit) and batch:
             if delay:
                 time.sleep(delay)
-            translated_all.extend(translate_fn(batch))
+            translated_all.extend(translate_batch(batch))
             batch, batch_len = [], 0
         batch.append(text)
         batch_len += len(text)
     if batch:
         if delay:
             time.sleep(delay)
-        translated_all.extend(translate_fn(batch))
+        translated_all.extend(translate_batch(batch))
 
-    it = iter(translated_all)
-    for entries in node_groups:
-        for child, is_text, prefix, core, suffix in entries:
-            if not is_text:
-                continue
-            translated = next(it)
-            child.replace_with(f"{prefix}{translated}{suffix}")
+    for (child, prefix, core, suffix), translated in zip(text_nodes, translated_all):
+        child.replace_with(f"{prefix}{translated}{suffix}")
 
     return soup.encode("utf-8"), char_count
 
