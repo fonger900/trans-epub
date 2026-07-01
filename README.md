@@ -1,64 +1,60 @@
 # trans-epub
 
-Dịch EPUB tiếng Anh sang tiếng Việt dùng Azure Translator (free tier: 2M ký tự/tháng).
+Dịch EPUB tiếng Anh sang tiếng Việt. Hỗ trợ ba engine: Azure Translator, Google Gemini, DeepSeek.
 
 ## Setup
 
-1. Tạo Azure Translator resource (Free F0) tại [Azure Portal](https://portal.azure.com)
-2. Copy key và region vào `.env`:
-
-```bash
-cp .env.example .env
-# Điền AZURE_TRANSLATOR_KEY và AZURE_TRANSLATOR_REGION
-```
-
-3. Cài dependencies:
+1. Cài dependencies:
 
 ```bash
 uv sync
 ```
 
+2. Tạo file `.env` và điền API key của engine muốn dùng:
+
+```bash
+cp .env.example .env
+```
+
+| Biến | Engine |
+|---|---|
+| `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION` | Azure Translator (free tier: 2M ký tự/tháng) |
+| `GEMINI_API_KEY` | Google Gemini |
+| `DEEPSEEK_API_KEY` | DeepSeek |
+
+Chỉ cần set key của một engine là đủ.
+
 ## Dùng
 
-### Cách dùng đơn giản nhất
-
 ```bash
-cd /home/phong/Projects/trans-epub
-source .venv/bin/activate
-python main.py sach.epub
-```
+# Dịch toàn bộ (tự chọn engine từ key có sẵn)
+trans-epub sach.epub
 
-### Các ví dụ hữu ích
-
-```bash
 # Chỉ định file output
-python main.py sach.epub output.epub
+trans-epub sach.epub output.epub
 
-# Dịch item cụ thể (xem số thứ tự bằng --list)
-python main.py sach.epub -i 3        # item 3
-python main.py sach.epub -i 1,3,5    # item 1, 3, 5
-python main.py sach.epub -i 2-6      # item 2 đến 6
-python main.py sach.epub -i 1,3-5,8  # kết hợp
+# Xem danh sách spine items (để biết số thứ tự dùng với -i)
+trans-epub sach.epub --list
 
-# Ép dùng engine cụ thể
-python main.py sach.epub --engine gemini
-python main.py sach.epub --engine azure
+# Dịch item cụ thể
+trans-epub sach.epub -i 3        # item 3
+trans-epub sach.epub -i 1,3,5    # item 1, 3, 5
+trans-epub sach.epub -i 2-6      # item 2 đến 6
+trans-epub sach.epub -i 1,3-5,8  # kết hợp
 
-# Chỉnh mức sáng tạo của model
-python main.py sach.epub --engine gemini --creativity 0.8
-python main.py sach.epub --engine deepseek --creativity 0.2
+# Chọn engine
+trans-epub sach.epub -e gemini
+trans-epub sach.epub -e azure
+trans-epub sach.epub -e deepseek
+
+# Số thread song song (mặc định: 4)
+trans-epub sach.epub -t 8
+
+# Chỉnh độ sáng tạo của model (Gemini và DeepSeek)
+trans-epub sach.epub -e gemini --creativity 0.8
+trans-epub sach.epub -e deepseek --creativity 0.2
 ```
-
-### Cấu hình nhanh
-
-- Tạo file `.env` trong thư mục dự án.
-- Chỉ cần đặt một trong các biến môi trường sau:
-  - `AZURE_TRANSLATOR_KEY`
-  - `GEMINI_API_KEY`
-  - `DEEPSEEK_API_KEY`
-- Nếu không chỉ định `--engine`, chương trình sẽ tự chọn engine đầu tiên có key hợp lệ.
-- `--creativity` điều chỉnh `temperature` cho Gemini và DeepSeek; bỏ qua để dùng mặc định của từng engine.
 
 ## Resume
 
-Mỗi chương dịch xong được lưu vào `output.epub.cache.json`. Nếu bị ngắt giữa chừng, chạy lại sẽ bỏ qua các chương đã dịch. Cache tự xóa khi dịch xong toàn bộ (khi dùng `-c` thì cache giữ lại để chạy tiếp).
+Mỗi item dịch xong được lưu vào `output.epub.cache.json`. Nếu bị ngắt giữa chừng, chạy lại lệnh cũ sẽ bỏ qua các item đã dịch. Cache tự xóa khi dịch xong toàn bộ; khi dùng `-i` thì cache giữ lại để có thể chạy tiếp.
