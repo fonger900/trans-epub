@@ -11,17 +11,34 @@ from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
     Progress,
+    ProgressColumn,
     SpinnerColumn,
+    Task,
     TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
+from rich.text import Text
 
 from .html_translator import translate_html
 from .toc import translate_toc_and_nav
 
 console = Console()
+
+
+class _DoneOrSpinner(ProgressColumn):
+    """Shows a spinner while running, ✓ when the task is complete."""
+
+    def __init__(self):
+        super().__init__()
+        self._spinner = SpinnerColumn()
+
+    def render(self, task: Task) -> Text:
+        if task.finished:
+            return Text("✓", style="bold green")
+        # delegate to SpinnerColumn for the animated spinner
+        return self._spinner.render(task)
 
 
 def get_spine_items(book: epub.EpubBook) -> list:
@@ -63,14 +80,14 @@ def translate_epub(
         return
 
     console.print(
-        f"[bold]Book:[/bold] {total} chapter(s)  "
+        f"[bold]Book:[/bold] {total} items  "
         f"[bold]Engine:[/bold] {engine}  "
         f"[bold]Threads:[/bold] {threads}"
     )
 
     translate_toc_and_nav(book, engine, creativity=creativity)
 
-    # Chapters that will actually be translated (not skipped)
+    # Items that will actually be translated (not skipped)
     work_items = [
         (i, item)
         for i, item in enumerate(items, 1)
@@ -84,8 +101,8 @@ def translate_epub(
 
     # ── Progress UI ────────────────────────────────────────────────────────────
     progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}"),
+        _DoneOrSpinner(),
+        TextColumn("{task.description}"),
         BarColumn(bar_width=None),
         MofNCompleteColumn(),
         TimeElapsedColumn(),
@@ -94,22 +111,22 @@ def translate_epub(
         expand=True,
     )
 
-    # One overall bar covering only the chapters we'll actually touch
-    overall_task: TaskID = progress.add_task("[green]Chapters", total=work_total)
+    overall_task: TaskID = progress.add_task(
+        "[bold green]Overall", total=work_total
+    )
 
-    # Per-worker slots (only visible while active)
+    # Per-worker rows — one per thread, shown only while active
     worker_tasks: list[TaskID] = [
-        progress.add_task(f"[dim]worker {i+1}", total=1, visible=False)
-        for i in range(threads)
+        progress.add_task("", total=1, visible=False)
+        for _ in range(threads)
     ]
     worker_lock = threading.Lock()
-    free_workers: list[int] = list(range(threads))  # indices into worker_tasks
+    free_workers: list[int] = list(range(threads))
 
     # ── Chapter processor ──────────────────────────────────────────────────────
     def process_chapter(i: int, item) -> None:
         nonlocal total_chars
         name = item.get_name()
-        label = f"ch.{i} · {Path(name).stem}"
 
         with cache_lock:
             in_cache = name in cache
@@ -126,7 +143,7 @@ def translate_epub(
 
         progress.update(
             worker_tasks[wid],
-            description=f"[cyan]{label}",
+            description=f"  [cyan]item {i}[/cyan]",
             completed=0,
             total=1,
             visible=True,
@@ -156,9 +173,8 @@ def translate_epub(
             free_workers.append(wid)
         progress.advance(overall_task)
 
-    # ── Load cached content for skipped chapters ───────────────────────────────
+    # ── Load cached content for skipped items ──────────────────────────────────
     def restore_skipped(i: int, item) -> None:
-        """For chapters outside the requested range, restore from cache if present."""
         name = item.get_name()
         with cache_lock:
             cached_content = cache.get(name)
@@ -171,12 +187,10 @@ def translate_epub(
     with progress:
         if threads > 1:
             with ThreadPoolExecutor(max_workers=threads) as executor:
-                # Submit only the chapters we need to translate
                 futures = {
                     executor.submit(process_chapter, i, item): item.get_name()
                     for i, item in work_items
                 }
-                # Restore skipped chapters from cache (fast, no API calls)
                 for i, item in enumerate(items, 1):
                     if only_chapters and i not in only_chapters:
                         restore_skipped(i, item)
@@ -203,13 +217,13 @@ def translate_epub(
 
     if failed:
         console.print(
-            f"\n[bold red]{len(failed)} chapter(s) failed[/bold red] "
-            "(re-run to retry just these):"
+            f"\n[bold red]{len(failed)} item(s) failed[/bold red] "
+            "(re-run to retry):"
         )
         for name, e in failed:
             console.print(f"  [red]•[/red] {name}: {e}")
 
     console.print(
-        f"\n[bold green]Done[/bold green] → {output_path}  "
-        f"(translated ~{total_chars:,} chars)"
+        f"[bold green]✓ Done[/bold green] → {output_path}  "
+        f"([dim]{total_chars:,} chars translated[/dim])"
     )
