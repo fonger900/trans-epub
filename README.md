@@ -34,11 +34,11 @@ python main.py sach.epub
 # Chỉ định file output
 python main.py sach.epub output.epub
 
-# Dịch chương cụ thể
-python main.py sach.epub -c 3        # chương 3
-python main.py sach.epub -c 1,3,5    # chương 1, 3, 5
-python main.py sach.epub -c 2-6      # chương 2 đến 6
-python main.py sach.epub -c 1,3-5,8  # kết hợp
+# Dịch item cụ thể (xem số thứ tự bằng --list)
+python main.py sach.epub -i 3        # item 3
+python main.py sach.epub -i 1,3,5    # item 1, 3, 5
+python main.py sach.epub -i 2-6      # item 2 đến 6
+python main.py sach.epub -i 1,3-5,8  # kết hợp
 
 # Ép dùng engine cụ thể
 python main.py sach.epub --engine gemini

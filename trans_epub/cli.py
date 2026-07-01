@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=["auto", "azure", "gemini", "deepseek"],
         default="auto",
     )
-    parser.add_argument("--chapters", "-c", help="e.g. 1,3,5 or 2-6 or 1,3-5,8")
+    parser.add_argument("--items", "-i", help="Spine item numbers to translate, e.g. 1,3,5 or 2-6 or 1,3-5,8 (see --list)")
     parser.add_argument("--list", "-l", action="store_true")
     parser.add_argument(
         "--threads",
@@ -54,9 +54,9 @@ def main(argv: list[str] | None = None) -> int:
     out = args.output or args.input.replace(".epub", "_vi.epub")
 
     only: set[int] | None = None
-    if args.chapters:
+    if args.items:
         only = set()
-        for part in args.chapters.split(","):
+        for part in args.items.split(","):
             if "-" in part:
                 a, b = part.split("-", 1)
                 only.update(range(int(a), int(b) + 1))
