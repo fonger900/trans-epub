@@ -15,3 +15,7 @@ dependencies = [
 
 [project.scripts]
 trans-epub = "trans_epub.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
