@@ -157,6 +157,8 @@ def translate_epub(
         progress.advance(overall_task)
 
     # ── Execute ────────────────────────────────────────────────────────────────
+    failed: list[tuple[str, str]] = []
+
     with progress:
         if threads > 1:
             with ThreadPoolExecutor(max_workers=threads) as executor:
@@ -164,27 +166,31 @@ def translate_epub(
                     executor.submit(process_chapter, i, item): item.get_name()
                     for i, item in enumerate(items, 1)
                 }
-                failed = []
                 for future in futures:
                     try:
                         future.result()
                     except Exception as e:
                         failed.append((futures[future], str(e)))
-
-            if failed:
-                console.print(
-                    f"\n[bold red]{len(failed)} chapter(s) failed[/bold red] "
-                    "(re-run to retry):"
-                )
-                for name, e in failed:
-                    console.print(f"  [red]•[/red] {name}: {e}")
         else:
             for i, item in enumerate(items, 1):
-                process_chapter(i, item)
+                try:
+                    process_chapter(i, item)
+                except Exception as e:
+                    failed.append((item.get_name(), str(e)))
 
+    # Always write — preserve whatever was translated even on partial failure
     epub.write_epub(output_path, book)
-    if not only_chapters:
+    if not only_chapters and not failed:
         cache_path.unlink(missing_ok=True)
+
+    if failed:
+        console.print(
+            f"\n[bold red]{len(failed)} chapter(s) failed[/bold red] "
+            "(re-run to retry just these):"
+        )
+        for name, e in failed:
+            console.print(f"  [red]•[/red] {name}: {e}")
+
     console.print(
         f"\n[bold green]Done[/bold green] → {output_path}  "
         f"(translated ~{total_chars:,} chars)"
