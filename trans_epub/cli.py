@@ -3,6 +3,8 @@
 import argparse
 import os
 
+from dotenv import load_dotenv
+
 from .epub_translator import translate_epub
 
 
@@ -23,6 +25,7 @@ def resolve_engine(engine: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv()
     parser = argparse.ArgumentParser(description="Translate EPUB EN→VI")
     parser.add_argument("input")
     parser.add_argument("output", nargs="?")
