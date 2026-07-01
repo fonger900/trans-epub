@@ -5,7 +5,7 @@ import time
 
 from bs4 import BeautifulSoup
 
-import trans_epub.engines as _engines_mod
+from .engines import ENGINES, translate_texts
 
 # Tags whose text content should be translated
 TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}
