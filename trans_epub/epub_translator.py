@@ -70,6 +70,14 @@ def translate_epub(
 
     translate_toc_and_nav(book, engine, creativity=creativity)
 
+    # Chapters that will actually be translated (not skipped)
+    work_items = [
+        (i, item)
+        for i, item in enumerate(items, 1)
+        if not only_chapters or i in only_chapters
+    ]
+    work_total = len(work_items)
+
     total_chars = 0
     total_chars_lock = threading.Lock()
     cache_lock = threading.Lock()
@@ -86,8 +94,8 @@ def translate_epub(
         expand=True,
     )
 
-    # One overall chapter bar
-    overall_task: TaskID = progress.add_task("[green]Chapters", total=total)
+    # One overall bar covering only the chapters we'll actually touch
+    overall_task: TaskID = progress.add_task("[green]Chapters", total=work_total)
 
     # Per-worker slots (only visible while active)
     worker_tasks: list[TaskID] = [
@@ -101,22 +109,14 @@ def translate_epub(
     def process_chapter(i: int, item) -> None:
         nonlocal total_chars
         name = item.get_name()
-        short = Path(name).stem  # nicer label
-
-        # Chapter not in the requested set — restore from cache if available
-        if only_chapters and i not in only_chapters:
-            with cache_lock:
-                cached_content = cache.get(name)
-            if cached_content:
-                item.set_content(cached_content.encode("utf-8"))
-            progress.advance(overall_task)
-            return
+        label = f"ch.{i} · {Path(name).stem}"
 
         with cache_lock:
             in_cache = name in cache
             cached_content = cache.get(name) if in_cache else None
 
         if in_cache:
+            item.set_content(cached_content.encode("utf-8"))
             progress.advance(overall_task)
             return
 
@@ -126,7 +126,7 @@ def translate_epub(
 
         progress.update(
             worker_tasks[wid],
-            description=f"[cyan]{short}",
+            description=f"[cyan]{label}",
             completed=0,
             total=1,
             visible=True,
@@ -156,27 +156,45 @@ def translate_epub(
             free_workers.append(wid)
         progress.advance(overall_task)
 
+    # ── Load cached content for skipped chapters ───────────────────────────────
+    def restore_skipped(i: int, item) -> None:
+        """For chapters outside the requested range, restore from cache if present."""
+        name = item.get_name()
+        with cache_lock:
+            cached_content = cache.get(name)
+        if cached_content:
+            item.set_content(cached_content.encode("utf-8"))
+
     # ── Execute ────────────────────────────────────────────────────────────────
     failed: list[tuple[str, str]] = []
 
     with progress:
         if threads > 1:
             with ThreadPoolExecutor(max_workers=threads) as executor:
+                # Submit only the chapters we need to translate
                 futures = {
                     executor.submit(process_chapter, i, item): item.get_name()
-                    for i, item in enumerate(items, 1)
+                    for i, item in work_items
                 }
+                # Restore skipped chapters from cache (fast, no API calls)
+                for i, item in enumerate(items, 1):
+                    if only_chapters and i not in only_chapters:
+                        restore_skipped(i, item)
+
                 for future in futures:
                     try:
                         future.result()
                     except Exception as e:
                         failed.append((futures[future], str(e)))
         else:
-            for i, item in enumerate(items, 1):
+            for i, item in work_items:
                 try:
                     process_chapter(i, item)
                 except Exception as e:
                     failed.append((item.get_name(), str(e)))
+            for i, item in enumerate(items, 1):
+                if only_chapters and i not in only_chapters:
+                    restore_skipped(i, item)
 
     # Always write — preserve whatever was translated even on partial failure
     epub.write_epub(output_path, book)
