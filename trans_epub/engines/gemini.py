@@ -14,7 +14,14 @@ from .base import (
 
 
 def gemini_translate(texts: list[str], creativity: float | None = None) -> list[str]:
-    key = os.environ["GEMINI_API_KEY"]
+    # Import here to avoid circular imports
+    from ..config import get_api_key
+
+    # Get API key from environment variable first, then from config
+    key = os.environ.get("GEMINI_API_KEY") or get_api_key("gemini")
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY not found in environment or config")
+
     generation_config: dict = {"responseMimeType": "application/json"}
     if creativity is not None:
         generation_config["temperature"] = creativity

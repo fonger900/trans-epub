@@ -22,9 +22,12 @@ cp .env.example .env
 |---|---|
 | `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION` | Azure Translator (free tier: 2M ký tự/tháng) |
 | `GEMINI_API_KEY` | Google Gemini |
+| `DEEPSEEK_API_KEY` | DeepSeek |
 | `DASHSCOPE_API_KEY` | Alibaba Cloud Model Studio |
-| `DASHSCOPE_API_BASE` | (optional) Alibaba workspace endpoint, defaults to `dashscope.aliyuncs.com/compatible-mode/v1` |
-| `DASHSCOPE_MODEL` | (optional) Model name, defaults to `qwen3-flash` |
+| `DASHSCOPE_API_BASE` | (optional) Custom Alibaba workspace endpoint |
+
+**Note:** Non-secret configuration (threads, creativity, models, etc.) goes in config.toml file.
+Secret values (API keys) go in .env file.
 
 Chỉ cần set key của một engine là đủ.
 
@@ -76,6 +79,36 @@ Mỗi item dịch xong được lưu vào `output.epub.cache.json`. Nếu bị n
 ## Configuration
 
 Trans-epub supports configuration via TOML files for managing API keys, defaults, and preferences.
+
+### Alibaba Engine Specific Options
+
+The Alibaba engine now supports additional configuration options:
+
+- `DASHSCOPE_MAX_TOKENS`: Override the maximum tokens (default: 8192)
+- `DASHSCOPE_WORKSPACE_ID`: Set custom workspace ID for private deployments
+- `DASHSCOPE_API_BASE`: Directly override the full API endpoint (takes precedence over WORKSPACE_ID)
+- Model selection: Use `DASHSCOPE_MODEL` to select from different Qwen variants
+  - `qwen-max`: Larger context, higher quality, higher cost
+  - `qwen-plus`: Balanced performance
+  - `qwen-turbo`: Fast, economical for simple translations
+  - `qwen-mt-plus`: Optimized for machine translation tasks
+
+For custom workspace deployments, set the workspace ID:
+
+```bash
+export DASHSCOPE_WORKSPACE_ID=your-workspace-id-here
+```
+
+For complex books, consider using `qwen-max` with adjusted batching settings:
+
+```toml
+[engines.alibaba]
+model = "qwen-max"
+char_limit = 8000
+creativity = 0.3
+```
+
+## Configuration
 
 ### Setup
 

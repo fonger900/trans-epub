@@ -8,7 +8,14 @@ from .base import ENGINES, EngineConfig, http_session
 
 
 def azure_translate(texts: list[str], **_kwargs) -> list[str]:
-    key = os.environ["AZURE_TRANSLATOR_KEY"]
+    # Import here to avoid circular imports
+    from ..config import get_api_key
+
+    # Get API key from environment variable first, then from config
+    key = os.environ.get("AZURE_TRANSLATOR_KEY") or get_api_key("azure")
+    if not key:
+        raise RuntimeError("AZURE_TRANSLATOR_KEY not found in environment or config")
+
     region = os.environ.get("AZURE_TRANSLATOR_REGION", "global")
 
     for attempt in range(8):
