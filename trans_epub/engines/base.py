@@ -88,6 +88,8 @@ def extract_translations(raw_json: str) -> list[str]:
         for v in data.values():
             if isinstance(v, list):
                 return v
+            if isinstance(v, dict) and "translations" in v:
+                return v["translations"]
     raise ValueError("Invalid JSON translation response format")
 
 

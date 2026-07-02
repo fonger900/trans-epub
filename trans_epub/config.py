@@ -1,171 +1,197 @@
-"""Configuration management for trans-epub."""
+"""Configuration system for trans-epub.
+
+Supports loading from:
+  - ./.trans-epub/config.toml  (project-local)
+  - ~/.config/trans-epub/config.toml  (user-global)
+  - An explicit path passed to load_config()
+  - TRANS_EPUB_* environment variables (override file config)
+"""
+
+from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
 
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib  # type: ignore
 
+# ── Sub-configs ───────────────────────────────────────────────────────────────
 
 @dataclass
 class EngineConfig:
-    """Configuration for a specific translation engine."""
-
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
-    model: Optional[str] = None
-    creativity: Optional[float] = None
-    char_limit: Optional[int] = None
-    elem_limit: Optional[int] = None
-    region: Optional[str] = None  # For Azure specifically
+    """Per-engine overrides (API key, base URL, model, creativity)."""
+    api_key: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    creativity: float | None = None
 
 
 @dataclass
 class BatchingConfig:
-    """Configuration for text batching."""
-
-    char_limit: int = 10000
+    """Controls batching behaviour when calling translation APIs."""
+    char_limit: int = 10_000
     elem_limit: int = 25
     delay: float = 0.0
 
 
 @dataclass
 class CachingConfig:
-    """Configuration for caching."""
-
+    """Controls the translation cache."""
     enabled: bool = True
     ttl_days: int = 30
-    location: str = "./cache"
+    location: str = "."  # directory to write *.cache.json files
 
 
 @dataclass
 class UIConfig:
-    """Configuration for user interface."""
-
-    progress_refresh_rate: float = 0.1
+    """UI / progress-bar settings."""
+    progress_refresh_rate: float = 10.0  # Hz
     verbose: bool = False
 
 
 @dataclass
 class GlobalConfig:
-    """Global configuration for trans-epub."""
-
-    engine: str = "azure"
+    """Top-level configuration object."""
+    engine: str = "auto"
     threads: int = 4
-    creativity: Optional[float] = None
+    creativity: float | None = None
     timeout: int = 300
-
-    engines: Dict[str, EngineConfig] = field(default_factory=dict)
+    engines: dict[str, EngineConfig] = field(default_factory=dict)
     batching: BatchingConfig = field(default_factory=BatchingConfig)
     caching: CachingConfig = field(default_factory=CachingConfig)
     ui: UIConfig = field(default_factory=UIConfig)
 
 
-def load_config(config_path: Optional[Path] = None) -> GlobalConfig:
-    """Load configuration from TOML file, with environment variable overrides."""
-    if config_path is None:
-        # Look for config in common locations
-        possible_paths = [
-            Path("./.trans-epub/config.toml"),
-            Path("~/.config/trans-epub/config.toml").expanduser(),
-            Path("/etc/trans-epub/config.toml"),
-        ]
+# ── Default search paths ──────────────────────────────────────────────────────
 
-        for path in possible_paths:
-            if path.exists():
-                config_path = path
-                break
+_DEFAULT_PATHS: list[Path] = [
+    Path(".trans-epub") / "config.toml",
+    Path.home() / ".config" / "trans-epub" / "config.toml",
+]
 
-    config_data = {}
-    if config_path and config_path.exists():
-        with open(config_path, "rb") as f:
-            config_data = tomllib.load(f)
+# Map engine name → env-var name for API keys
+_ENGINE_KEY_ENV: dict[str, str] = {
+    "azure": "AZURE_TRANSLATOR_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "alibaba": "DASHSCOPE_API_KEY",
+}
 
-    # Create config with defaults
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def load_config(path: Path | None = None) -> GlobalConfig:
+    """Load configuration from *path*, the default search paths, or env vars.
+
+    Priority (highest → lowest):
+      1. TRANS_EPUB_* environment variables
+      2. Explicit *path* argument
+      3. First found file in _DEFAULT_PATHS
+      4. Built-in defaults
+    """
     cfg = GlobalConfig()
 
-    # Override with config file values
-    defaults = config_data.get("defaults", {})
-    cfg.engine = defaults.get("engine", cfg.engine)
-    cfg.threads = defaults.get("threads", cfg.threads)
-    cfg.creativity = defaults.get("creativity", cfg.creativity)
-    cfg.timeout = defaults.get("timeout", cfg.timeout)
+    # Try to load from file
+    config_file: Path | None = path
+    if config_file is None:
+        for candidate in _DEFAULT_PATHS:
+            if candidate.exists():
+                config_file = candidate
+                break
 
-    # Engine configs
-    engine_configs = config_data.get("engines", {})
-    for engine_name in ["azure", "alibaba", "gemini", "deepseek"]:
-        if engine_name in engine_configs:
-            engine_data = engine_configs[engine_name]
-            cfg.engines[engine_name] = EngineConfig(
-                api_key=engine_data.get("api_key"),
-                base_url=engine_data.get("base_url"),
-                model=engine_data.get("model"),
-                creativity=engine_data.get("creativity"),
-                char_limit=engine_data.get("char_limit"),
-                elem_limit=engine_data.get("elem_limit"),
-                region=engine_data.get("region"),
-            )
+    if config_file is not None and config_file.exists():
+        _apply_toml(cfg, config_file)
 
-    # Batching config
-    batching_data = config_data.get("batching", {})
-    cfg.batching = BatchingConfig(
-        char_limit=batching_data.get("char_limit", cfg.batching.char_limit),
-        elem_limit=batching_data.get("elem_limit", cfg.batching.elem_limit),
-        delay=batching_data.get("delay", cfg.batching.delay),
-    )
-
-    # Caching config
-    caching_data = config_data.get("caching", {})
-    cfg.caching = CachingConfig(
-        enabled=caching_data.get("enabled", cfg.caching.enabled),
-        ttl_days=caching_data.get("ttl_days", cfg.caching.ttl_days),
-        location=caching_data.get("location", cfg.caching.location),
-    )
-
-    # UI config
-    ui_data = config_data.get("ui", {})
-    cfg.ui = UIConfig(
-        progress_refresh_rate=ui_data.get(
-            "progress_refresh_rate", cfg.ui.progress_refresh_rate
-        ),
-        verbose=ui_data.get("verbose", cfg.ui.verbose),
-    )
-
-    # Override with environment variables (highest priority)
-    cfg.engine = os.getenv("TRANS_EPUB_ENGINE", cfg.engine)
-    if "TRANS_EPUB_THREADS" in os.environ:
-        cfg.threads = int(os.getenv("TRANS_EPUB_THREADS", str(cfg.threads)))
-    if "TRANS_EPUB_CREATIVITY" in os.environ:
-        cfg.creativity = float(os.getenv("TRANS_EPUB_CREATIVITY", str(cfg.creativity)))
-    if "TRANS_EPUB_TIMEOUT" in os.environ:
-        cfg.timeout = int(os.getenv("TRANS_EPUB_TIMEOUT", str(cfg.timeout)))
+    # Environment variable overrides
+    if env_engine := os.environ.get("TRANS_EPUB_ENGINE"):
+        cfg.engine = env_engine
+    if env_threads := os.environ.get("TRANS_EPUB_THREADS"):
+        try:
+            cfg.threads = int(env_threads)
+        except ValueError:
+            pass
+    if env_creativity := os.environ.get("TRANS_EPUB_CREATIVITY"):
+        try:
+            cfg.creativity = float(env_creativity)
+        except ValueError:
+            pass
+    if env_timeout := os.environ.get("TRANS_EPUB_TIMEOUT"):
+        try:
+            cfg.timeout = int(env_timeout)
+        except ValueError:
+            pass
 
     return cfg
 
 
-def get_api_key(engine: str) -> Optional[str]:
-    """Get API key for engine, checking config and environment variables."""
-    # Check environment variables first
-    env_vars = {
-        "azure": ["AZURE_TRANSLATOR_KEY", "TRANS_EPUB_AZURE_KEY"],
-        "alibaba": ["DASHSCOPE_API_KEY", "TRANS_EPUB_ALIBABA_KEY"],
-        "gemini": ["GEMINI_API_KEY", "TRANS_EPUB_GEMINI_KEY"],
-        "deepseek": ["DEEPSEEK_API_KEY", "TRANS_EPUB_DEEPSEEK_KEY"],
-    }
-
-    for env_var in env_vars.get(engine, []):
-        key = os.getenv(env_var)
-        if key:
-            return key
-
-    # Fall back to config file
-    config = load_config()
-    engine_cfg = config.engines.get(engine)
-    if engine_cfg:
-        return engine_cfg.api_key
-
+def get_api_key(engine: str) -> str | None:
+    """Return the API key for *engine* from environment variables."""
+    env_var = _ENGINE_KEY_ENV.get(engine)
+    if env_var:
+        return os.environ.get(env_var)
     return None
+
+
+# ── TOML loading (stdlib tomllib, Python 3.11+) ───────────────────────────────
+
+def _apply_toml(cfg: GlobalConfig, path: Path) -> None:
+    """Parse *path* as TOML and apply values to *cfg* in-place."""
+    try:
+        import tomllib  # Python 3.11+
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return  # TOML not available; silently skip
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    defaults = data.get("defaults", {})
+    if "engine" in defaults:
+        cfg.engine = str(defaults["engine"])
+    if "threads" in defaults:
+        cfg.threads = int(defaults["threads"])
+    if "creativity" in defaults:
+        cfg.creativity = float(defaults["creativity"])
+    if "timeout" in defaults:
+        cfg.timeout = int(defaults["timeout"])
+
+    # [engines.<name>] sections
+    for eng_name, eng_data in data.get("engines", {}).items():
+        ec = EngineConfig()
+        if "api_key" in eng_data:
+            ec.api_key = str(eng_data["api_key"])
+        if "base_url" in eng_data:
+            ec.base_url = str(eng_data["base_url"])
+        if "model" in eng_data:
+            ec.model = str(eng_data["model"])
+        if "creativity" in eng_data:
+            ec.creativity = float(eng_data["creativity"])
+        cfg.engines[eng_name] = ec
+
+    # [batching] section
+    batching = data.get("batching", {})
+    if "char_limit" in batching:
+        cfg.batching.char_limit = int(batching["char_limit"])
+    if "elem_limit" in batching:
+        cfg.batching.elem_limit = int(batching["elem_limit"])
+    if "delay" in batching:
+        cfg.batching.delay = float(batching["delay"])
+
+    # [caching] section
+    caching = data.get("caching", {})
+    if "enabled" in caching:
+        cfg.caching.enabled = bool(caching["enabled"])
+    if "ttl_days" in caching:
+        cfg.caching.ttl_days = int(caching["ttl_days"])
+    if "location" in caching:
+        cfg.caching.location = str(caching["location"])
+
+    # [ui] section
+    ui = data.get("ui", {})
+    if "progress_refresh_rate" in ui:
+        cfg.ui.progress_refresh_rate = float(ui["progress_refresh_rate"])
+    if "verbose" in ui:
+        cfg.ui.verbose = bool(ui["verbose"])
