@@ -4,7 +4,7 @@ version = "1.1.0"
 description = "Translate EPUB books from English to Vietnamese using various AI engines"
 readme = "README.md"
 requires-python = ">=3.13"
-license = "MIT"
+license = {text = "MIT"}
 authors = [{name = "Phong Nguyen", email = "fonger900@gmail.com"}]
 keywords = ["epub", "translation", "ai", "nlp", "book", "ebook"]
 classifiers = [
@@ -17,11 +17,6 @@ classifiers = [
     "Environment :: Console",
     "Natural Language :: Vietnamese",
 ]
-
-[project.urls]
-Homepage = "https://github.com/fonger900/trans-epub"
-Repository = "https://github.com/fonger900/trans-epub"
-
 dependencies = [
     "ebooklib>=0.18",
     "beautifulsoup4>=4.12",
@@ -29,9 +24,11 @@ dependencies = [
     "requests>=2.32",
     "python-dotenv>=1.0",
     "rich>=13",
-    "tomli>=2.0.1; python_version < '3.11'",
-    "importlib-metadata>=4.6; python_version < '3.10'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/fonger900/trans-epub"
+Repository = "https://github.com/fonger900/trans-epub"
 
 [project.scripts]
 trans-epub = "trans_epub.cli:main"
