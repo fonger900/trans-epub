@@ -118,6 +118,7 @@ def translate_epub(
     ]
 
     total_chars = 0
+    cached_chars = 0
     total_chars_lock = threading.Lock()
     cache_lock = threading.Lock()
 
@@ -155,7 +156,7 @@ def translate_epub(
 
     # ── Chapter processor ──────────────────────────────────────────────────────
     def process_chapter(i: int, item) -> None:
-        nonlocal total_chars
+        nonlocal total_chars, cached_chars
         name = item.get_name()
         fname = _short_name(name)
 
@@ -167,6 +168,9 @@ def translate_epub(
             assert cached_content is not None  # Guaranteed by in_cache check
             item.set_content(cached_content.encode("utf-8"))
             progress.update(overall_task, advance=weights[name])
+            with total_chars_lock:
+                total_chars += weights[name]
+                cached_chars += weights[name]
             return
 
         # Claim a worker slot
@@ -272,5 +276,6 @@ def translate_epub(
 
     console.print(
         f"[bold green]✓ Done[/bold green] → {output_path}  "
-        f"([dim]{total_chars:,} chars translated[/dim])"
+        f"([dim]{total_chars:,} chars translated[/dim], "
+        f"[dim]{cached_chars:,} cached[/dim])"
     )
