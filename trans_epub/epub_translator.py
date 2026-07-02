@@ -122,14 +122,7 @@ def translate_epub(
     total_chars_lock = threading.Lock()
     cache_lock = threading.Lock()
 
-    # ── Pre-calculate per-chapter translatable-char counts ─────────────────────
-    # The overall bar is measured in translatable-text chars so the final count
-    # matches the "chars translated" summary.
-    weights: dict[str, int] = {
-        item.get_name(): count_translatable_chars(item.get_content())
-        for _, item in work_items
-    }
-    overall_total_chars = sum(weights.values()) or 1  # avoid division by zero
+    num_work = len(work_items)
 
     # ── Progress UI ────────────────────────────────────────────────────────────
     progress = Progress(
@@ -143,9 +136,7 @@ def translate_epub(
         expand=True,
     )
 
-    overall_task: TaskID = progress.add_task(
-        "[bold green]Overall", total=overall_total_chars
-    )
+    overall_task: TaskID = progress.add_task("[bold green]Overall", total=num_work)
 
     # Per-worker rows — one per thread, shown only while active
     worker_tasks: list[TaskID] = [
@@ -167,10 +158,11 @@ def translate_epub(
         if in_cache:
             assert cached_content is not None  # Guaranteed by in_cache check
             item.set_content(cached_content.encode("utf-8"))
-            progress.update(overall_task, advance=weights[name])
+            progress.update(overall_task, advance=1)
+            chars = count_translatable_chars(item.get_content())
             with total_chars_lock:
-                total_chars += weights[name]
-                cached_chars += weights[name]
+                total_chars += chars
+                cached_chars += chars
             return
 
         # Claim a worker slot
@@ -185,8 +177,8 @@ def translate_epub(
             visible=True,
         )
 
-        # Overall bar advances by actual translatable chars per batch so the
-        # final bar total matches the "chars translated" summary.
+        # Overall bar advances 1 per completed chapter; per-chapter bar
+        # shows batch-level detail for in-progress work.
 
         def on_progress(batch_num: int, total_batches: int, batch_chars: int) -> None:
             nonlocal total_chars
@@ -200,7 +192,6 @@ def translate_epub(
             )
             with total_chars_lock:
                 total_chars += batch_chars
-            progress.update(overall_task, advance=batch_chars)
 
         original = item.get_content()
         try:
@@ -212,6 +203,8 @@ def translate_epub(
             with worker_lock:
                 free_workers.append(wid)
             raise RuntimeError(f"{name}: {e}") from e
+
+        progress.update(overall_task, advance=1)
 
         with cache_lock:
             cache[name] = translated.decode("utf-8")
