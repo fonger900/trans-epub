@@ -121,14 +121,15 @@ def translate_epub(
     total_chars_lock = threading.Lock()
     cache_lock = threading.Lock()
 
-    # ── Pre-calculate total chars for smooth overall progress ─────────────────
-    overall_total_chars = sum(
-        len(item.get_content().decode("utf-8", errors="replace"))
+    # ── Pre-calculate per-chapter weights for smooth overall progress ─────────
+    # The overall bar is measured in raw-content chars (a fixed weight per item),
+    # not translatable-text chars — otherwise it would never fill, since tags,
+    # whitespace, and preserved content don't get translated.
+    weights: dict[str, int] = {
+        item.get_name(): len(item.get_content().decode("utf-8", errors="replace"))
         for _, item in work_items
-        if item.get_name() not in cache
-    )
-    if overall_total_chars == 0:
-        overall_total_chars = 1  # avoid division by zero
+    }
+    overall_total_chars = sum(weights.values()) or 1  # avoid division by zero
 
     # ── Progress UI ────────────────────────────────────────────────────────────
     progress = Progress(
@@ -166,8 +167,7 @@ def translate_epub(
         if in_cache:
             assert cached_content is not None  # Guaranteed by in_cache check
             item.set_content(cached_content.encode("utf-8"))
-            cached_chars = len(cached_content)
-            progress.update(overall_task, advance=cached_chars)
+            progress.update(overall_task, advance=weights[name])
             return
 
         # Claim a worker slot
@@ -182,12 +182,13 @@ def translate_epub(
             visible=True,
         )
 
-        chapter_chars = 0
+        # Overall bar advances in raw-content units; spread this chapter's weight
+        # across its batches so it reaches exactly `weight` when the last completes.
+        weight = weights[name]
+        advanced = 0.0
 
         def on_progress(batch_num: int, total_batches: int, batch_chars: int) -> None:
-            nonlocal chapter_chars
-            nonlocal total_chars
-            chapter_chars += batch_chars
+            nonlocal total_chars, advanced
             progress.update(
                 worker_tasks[wid],
                 description=(
@@ -198,7 +199,9 @@ def translate_epub(
             )
             with total_chars_lock:
                 total_chars += batch_chars
-            progress.update(overall_task, advance=batch_chars)
+            target = weight * batch_num / total_batches
+            progress.update(overall_task, advance=target - advanced)
+            advanced = target
 
         original = item.get_content()
         try:
