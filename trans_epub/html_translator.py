@@ -83,44 +83,44 @@ def translate_html(
 
     char_count = sum(len(t) for t in texts)
 
-    # ── Pre-compute batches ────────────────────────────────────────────────────
-    batches: list[list[str]] = []
-    cur_batch: list[str] = []
-    cur_len = 0
+        # ── Pre-compute batches ────────────────────────────────────────────────────
+        batches: list[list[str]] = []
+        cur_batch: list[str] = []
+        cur_len = 0
 
-    for text in texts:
-        if (
-            cur_len + len(text) > cfg.char_limit or len(cur_batch) >= cfg.elem_limit
-        ) and cur_batch:
+        for text in texts:
+            if (
+                cur_len + len(text) > cfg.char_limit or len(cur_batch) >= cfg.elem_limit
+            ) and cur_batch:
+                batches.append(cur_batch)
+                cur_batch, cur_len = [], 0
+            cur_batch.append(text)
+            cur_len += len(text)
+        if cur_batch:
             batches.append(cur_batch)
-            cur_batch, cur_len = [], 0
-        cur_batch.append(text)
-        cur_len += len(text)
-    if cur_batch:
-        batches.append(cur_batch)
 
-    total_batches = len(batches)
+        total_batches = len(batches)
 
-    # ── Translate each batch ──────────────────────────────────────────────────
-    def collapse_translation(parts: list[str]) -> str:
-        return " ".join(part.strip() for part in parts if part.strip())
+        # ── Translate each batch ──────────────────────────────────────────────────
+        def collapse_translation(parts: list[str]) -> str:
+            return " ".join(part.strip() for part in parts if part.strip())
 
-    def translate_batch(batch_texts: list[str]) -> list[str]:
-        result = cfg.translate(batch_texts, creativity=creativity)
-        if len(result) == len(batch_texts):
-            return result
-        if len(batch_texts) == 1:
-            return [collapse_translation(result)]
-        mid = len(batch_texts) // 2
-        return translate_batch(batch_texts[:mid]) + translate_batch(batch_texts[mid:])
+        def translate_batch(batch_texts: list[str]) -> list[str]:
+            result = cfg.translate(batch_texts, creativity=creativity)
+            if len(result) == len(batch_texts):
+                return result
+            if len(batch_texts) == 1:
+                return [collapse_translation(result)]
+            mid = len(batch_texts) // 2
+            return translate_batch(batch_texts[:mid]) + translate_batch(batch_texts[mid:])
 
-    translated_all: list[str] = []
-    for i, batch in enumerate(batches):
-        if cfg.delay and i > 0:
-            time.sleep(cfg.delay)
-        translated_all.extend(translate_batch(batch))
-        if progress_cb:
-            progress_cb(i + 1, total_batches, sum(len(t) for t in batch))
+        translated_all: list[str] = []
+        for i, batch in enumerate(batches):
+            if cfg.delay and i > 0:
+                time.sleep(cfg.delay)
+            translated_all.extend(translate_batch(batch))
+            if progress_cb:
+                progress_cb(i + 1, total_batches, sum(len(t) for t in batch))
 
     for (child, prefix, core, suffix), translated in zip(text_nodes, translated_all):
         child.replace_with(f"{prefix}{translated}{suffix}")
