@@ -20,7 +20,9 @@ cp .env.example .env
 |---|---|
 | `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION` | Azure Translator (free tier: 2M ký tự/tháng) |
 | `GEMINI_API_KEY` | Google Gemini |
-| `DEEPSEEK_API_KEY` | DeepSeek |
+| `DASHSCOPE_API_KEY` | Alibaba Cloud Model Studio |
+| `DASHSCOPE_API_BASE` | (optional) Alibaba workspace endpoint, defaults to `dashscope.aliyuncs.com/compatible-mode/v1` |
+| `DASHSCOPE_MODEL` | (optional) Model name, defaults to `qwen3-flash` |
 
 Chỉ cần set key của một engine là đủ.
 
@@ -46,13 +48,15 @@ trans-epub sach.epub -i 1,3-5,8  # kết hợp
 trans-epub sach.epub -e gemini
 trans-epub sach.epub -e azure
 trans-epub sach.epub -e deepseek
+trans-epub sach.epub -e alibaba
 
 # Số thread song song (mặc định: 4)
 trans-epub sach.epub -t 8
 
-# Chỉnh độ sáng tạo của model (Gemini và DeepSeek)
+# Chỉnh độ sáng tạo của model (Gemini, DeepSeek, và Alibaba)
 trans-epub sach.epub -e gemini --creativity 0.8
 trans-epub sach.epub -e deepseek --creativity 0.2
+trans-epub sach.epub -e alibaba --creativity 0.5
 ```
 
 ## Resume
