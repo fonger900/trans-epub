@@ -2,9 +2,11 @@
 
 import argparse
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .config import get_api_key, load_config
 from .epub_translator import translate_epub
 
 
@@ -12,6 +14,8 @@ def resolve_engine(engine: str) -> str:
     """Resolve 'auto' to the first engine whose API key is present."""
     if engine != "auto":
         return engine
+
+    # Check environment variables
     if os.environ.get("AZURE_TRANSLATOR_KEY"):
         return "azure"
     if os.environ.get("GEMINI_API_KEY"):
@@ -20,14 +24,28 @@ def resolve_engine(engine: str) -> str:
         return "deepseek"
     if os.environ.get("DASHSCOPE_API_KEY"):
         return "alibaba"
+
+    # Check config file
+    config = load_config()
+    engines_to_check = ["azure", "gemini", "deepseek", "alibaba"]
+    for engine_name in engines_to_check:
+        key = get_api_key(engine_name)
+        if key:
+            return engine_name
+
     raise RuntimeError(
         "No translation API key found. "
-        "Set AZURE_TRANSLATOR_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, or DASHSCOPE_API_KEY."
+        "Set AZURE_TRANSLATOR_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, or DASHSCOPE_API_KEY, "
+        "or configure in ~/.config/trans-epub/config.toml."
     )
 
 
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
+
+    # Load config early to get defaults
+    config = load_config()
+
     parser = argparse.ArgumentParser(description="Translate EPUB EN→VI")
     parser.add_argument("input")
     parser.add_argument("output", nargs="?")
@@ -35,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         "--engine",
         "-e",
         choices=["auto", "azure", "gemini", "deepseek", "alibaba"],
-        default="auto",
+        default=config.engine,
     )
     parser.add_argument(
         "--items",
@@ -47,13 +65,19 @@ def main(argv: list[str] | None = None) -> int:
         "--threads",
         "-t",
         type=int,
-        default=4,
+        default=config.threads,
         help="Number of parallel translation threads",
     )
     parser.add_argument(
         "--creativity",
         type=float,
+        default=config.creativity,
         help="Model creativity/temperature for Gemini, DeepSeek, and Alibaba",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to configuration file (default: search in standard locations)",
     )
     args = parser.parse_args(argv)
 

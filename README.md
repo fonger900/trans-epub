@@ -62,3 +62,62 @@ trans-epub sach.epub -e alibaba --creativity 0.5
 ## Resume
 
 Mỗi item dịch xong được lưu vào `output.epub.cache.json`. Nếu bị ngắt giữa chừng, chạy lại lệnh cũ sẽ bỏ qua các item đã dịch. Cache tự xóa khi dịch xong toàn bộ; khi dùng `-i` thì cache giữ lại để có thể chạy tiếp.
+
+## Configuration
+
+Trans-epub supports configuration via TOML files for managing API keys, defaults, and preferences.
+
+### Setup
+
+Create a configuration file at one of these locations:
+
+- `./.trans-epub/config.toml` (project-specific)
+- `~/.config/trans-epub/config.toml` (user-global)
+
+Use the provided example as a starting point:
+
+```bash
+cp .trans-epub/config.example.toml ~/.config/trans-epub/config.toml
+```
+
+### Configuration Options
+
+#### Default Settings
+
+- `engine`: Default translation engine (azure, alibaba, gemini, deepseek)
+- `threads`: Number of concurrent translation threads
+- `creativity`: Default creativity for LLM engines (0.0-1.0)
+- `timeout`: Timeout for API calls in seconds
+
+#### Engine-Specific Keys
+
+Each engine section supports:
+
+- `api_key`: API key (can also be set via environment variables)
+- `base_url`: API endpoint URL
+- `model`: Model name to use
+- `creativity`: Default creativity for this engine
+- `char_limit`, `elem_limit`: Batching limits
+
+#### Batching
+
+Controls how text is chunked for API calls:
+
+- `char_limit`: Max characters per batch
+- `elem_limit`: Max HTML elements per batch
+- `delay`: Delay between API calls (for rate limiting)
+
+#### Caching
+
+- `enabled`: Whether caching is enabled
+- `ttl_days`: Days before cache expires (0 = never expire)
+- `location`: Where to store cache files
+
+### Environment Variable Precedence
+
+Environment variables override configuration file settings:
+
+- `TRANS_EPUB_ENGINE`: Default engine
+- `TRANS_EPUB_THREADS`: Thread count
+- `TRANS_EPUB_CREATIVITY`: Creativity value
+- `AZURE_TRANSLATOR_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `DASHSCOPE_API_KEY`: API keys

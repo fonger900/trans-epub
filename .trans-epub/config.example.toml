@@ -1,0 +1,44 @@
+# trans-epub configuration example
+# Copy this file to ~/.config/trans-epub/config.toml or ./config.toml
+
+[defaults]
+engine = "azure"              # Default engine (azure, alibaba, gemini, deepseek)
+threads = 4                   # Number of concurrent translation threads
+creativity = 0.3              # Default creativity for LLM engines (0.0-1.0)
+timeout = 300                 # Timeout for API calls in seconds
+
+[engines.azure]
+api_key = ""                  # Set your Azure Translator key
+region = "global"             # Azure region (global, or specific region)
+char_limit = 40000            # Max chars per batch (up to 50k for Azure)
+elem_limit = 100              # Max elements per batch
+
+[engines.alibaba]
+api_key = ""                  # Set your DashScope API key
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model = "qwen-max"            # Model name
+creativity = 0.4              # Default creativity (0.0-1.0)
+
+[engines.gemini]
+api_key = ""                  # Set your Google Gemini API key
+model = "gemini-3.5-flash"    # Model name
+creativity = 0.3              # Default creativity (0.0-1.0)
+
+[engines.deepseek]
+api_key = ""                  # Set your DeepSeek API key
+model = "deepseek-chat"       # Model name
+creativity = 0.4              # Default creativity (0.0-1.0)
+
+[batching]
+char_limit = 10000            # Default max characters per batch
+elem_limit = 25               # Default max elements per batch
+delay = 0.0                   # Delay between API calls (rate limiting)
+
+[caching]
+enabled = true                # Enable/disable caching of translations
+ttl_days = 30                 # Cache expiration in days (0 = never expire)
+location = "./cache"          # Directory for cache files
+
+[ui]
+progress_refresh_rate = 0.1   # Progress bar refresh rate in seconds
+verbose = false               # Enable verbose output

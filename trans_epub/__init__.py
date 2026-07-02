@@ -8,9 +8,11 @@ Public API:
   resolve_engine   — resolve 'auto' to a concrete engine name
   ENGINES          — engine registry dict
   main             — CLI entry point
+  config           — configuration system
 """
 
 from .cli import main, resolve_engine  # noqa: F401
+from .config import get_api_key, load_config  # noqa: F401
 from .engines import (  # noqa: F401
     ENGINES,
     EngineConfig,
