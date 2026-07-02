@@ -42,6 +42,13 @@ ENGINES: dict[str, EngineConfig] = {}
 
 # ── Shared LLM prompt ─────────────────────────────────────────────────────────
 
+# Inline emphasis tags kept in the text sent to (and expected back from) the LLM.
+# Single source of truth: html_translator imports this, and the prompt below is
+# built from it.
+EMPHASIS_TAGS = {"em", "strong", "b", "i"}
+
+_EMPHASIS_LIST = ", ".join(f"<{t}>" for t in sorted(EMPHASIS_TAGS))
+
 LLM_PROMPT = (
     "You are a professional literary translator. Translate the following consecutive "
     "paragraphs of a book from English to Vietnamese.\n"
@@ -52,6 +59,10 @@ LLM_PROMPT = (
     "voice, and complex structures to natural Vietnamese phrasing.\n"
     "- Maintain the tone, style, and flow of the original text across the paragraphs "
     "(they are in consecutive order).\n"
+    f"- Some texts contain HTML emphasis tags ({_EMPHASIS_LIST}). "
+    "Keep those tags in your translation, placed around the equivalent emphasized "
+    "words or phrases. Do not add, remove, or change any other HTML tags, and do "
+    "not wrap the translation in a paragraph or block tag.\n"
     "- Return a JSON object with a single key 'translations' containing the array of "
     "translated strings in the exact same order.\n\n"
 )

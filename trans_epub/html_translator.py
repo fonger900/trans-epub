@@ -4,9 +4,9 @@ import re
 import time
 from typing import Callable
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag
 
-from .engines import ENGINES
+from .engines import EMPHASIS_TAGS, ENGINES
 
 # Tags whose text content should be translated
 TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}
@@ -22,6 +22,35 @@ PRESERVE_CLASSES = {"note", "footnote"}
 
 # Progress callback: (batch_number, total_batches, batch_chars)
 ProgressCallback = Callable[[int, int, int], None]
+
+# Matches any tag that isn't an emphasis tag — used to strip everything else
+# from the LLM's output.
+_STRIP_TAGS_RE = re.compile(
+    rf"<(?!/?(?:{'|'.join(EMPHASIS_TAGS)})\b)[^>]+>", re.I
+)
+
+
+def _extract_text_with_emphasis(node: Tag) -> str:
+    """Extract text content keeping only emphasis tags for translation.
+
+    e.g. ``<p>Hello <em>world</em> <span class="x">!</span></p>``
+         → ``"Hello <em>world</em> !"``
+    """
+    parts: list[str] = []
+    for child in node.children:
+        if isinstance(child, NavigableString):
+            parts.append(str(child))
+        elif isinstance(child, Tag) and child.name in EMPHASIS_TAGS:
+            inner = _extract_text_with_emphasis(child)
+            parts.append(f"<{child.name}>{inner}</{child.name}>")
+        else:
+            parts.append(child.get_text())
+    return "".join(parts).strip()
+
+
+def _clean_translated(raw: str) -> str:
+    """Sanitise the LLM's output: keep only known emphasis tags, strip the rest."""
+    return _STRIP_TAGS_RE.sub("", raw.strip()).strip()
 
 
 def translate_html(
@@ -62,25 +91,8 @@ def translate_html(
     if not nodes:
         return html_bytes, 0
 
-    text_nodes: list[tuple] = []
-    texts: list[str] = []
-
-    for node in nodes:
-        for child in node.find_all(string=True):
-            text = str(child)
-            if not text.strip():
-                continue
-            match = re.match(r"^(\s*)(.*?)(\s*)$", text, flags=re.S)
-            if match:
-                prefix, core, suffix = match.groups()
-            else:
-                prefix, core, suffix = "", text, ""
-            text_nodes.append((child, prefix, core, suffix))
-            texts.append(core)
-
-    if not texts:
-        return html_bytes, 0
-
+    # Extract each element as simplified text — plain text + emphasis tags only
+    texts: list[str] = [_extract_text_with_emphasis(node) for node in nodes]
     char_count = sum(len(t) for t in texts)
 
     # ── Pre-compute batches ────────────────────────────────────────────────────
@@ -122,7 +134,16 @@ def translate_html(
         if progress_cb:
             progress_cb(i + 1, total_batches, sum(len(t) for t in batch))
 
-    for (child, prefix, core, suffix), translated in zip(text_nodes, translated_all):
-        child.replace_with(f"{prefix}{translated}{suffix}")
+    # Write translated content back into each element
+    for node, translated in zip(nodes, translated_all):
+        cleaned = _clean_translated(translated)
+        node.clear()
+        if "<" in cleaned:
+            # Parse the fragment so emphasis tags become real nodes
+            frag = BeautifulSoup(f"<x>{cleaned}</x>", "lxml-xml").find("x")
+            for child in list(frag.children):
+                node.append(child)
+        else:
+            node.append(NavigableString(cleaned))
 
     return soup.encode("utf-8"), char_count

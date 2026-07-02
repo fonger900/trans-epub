@@ -5,6 +5,7 @@ Import all engine modules so their ENGINES registrations run at package load tim
 from .alibaba import alibaba_translate  # noqa: F401
 from .azure import azure_translate  # noqa: F401
 from .base import (  # noqa: F401
+    EMPHASIS_TAGS,
     ENGINES,
     LLM_PROMPT,
     EngineConfig,
