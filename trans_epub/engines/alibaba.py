@@ -14,7 +14,9 @@ import time
 from .base import ENGINES, extract_translations, http_session
 
 DEFAULT_ALIBABA_CREATIVITY = 0.4
-_DEFAULT_BASE_URL = "https://ws-s5gfqlikkiawofwj.ap-southeast-1.maas.aliyuncs.com"
+_DEFAULT_BASE_URL = (
+    "https://ws-s5gfqlikkiawofwj.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+)
 _DEFAULT_MODEL = "qwen-plus"
 
 _PROMPT_PREFIX = (
@@ -37,7 +39,7 @@ def alibaba_translate(texts: list[str], creativity: float | None = None) -> list
 
     for attempt in range(5):
         resp = http_session.post(
-            f"{base_url}/compatible-mode/v1",
+            f"{base_url}/chat/completions",
             headers={
                 "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
