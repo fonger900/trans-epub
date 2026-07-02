@@ -187,7 +187,6 @@ def translate_epub(
 
         # Overall bar advances by actual translatable chars per batch so the
         # final bar total matches the "chars translated" summary.
-        weight = weights[name]
 
         def on_progress(batch_num: int, total_batches: int, batch_chars: int) -> None:
             nonlocal total_chars
