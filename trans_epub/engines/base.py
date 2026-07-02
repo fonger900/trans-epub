@@ -15,11 +15,12 @@ from dataclasses import dataclass
 from typing import Callable
 
 import requests
+from requests.adapters import HTTPAdapter
 
 # ── Shared HTTP session ────────────────────────────────────────────────────────
 
 http_session = requests.Session()
-_adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+_adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20)
 http_session.mount("https://", _adapter)
 http_session.mount("http://", _adapter)
 
