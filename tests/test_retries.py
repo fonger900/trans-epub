@@ -11,7 +11,9 @@ from trans_epub.engines.base import call_with_retry
 def _make_success_resp(text="Xin chào"):
     resp = Mock()
     resp.status_code = 200
-    resp.json.return_value = {"choices": [{"message": {"content": f'{{"translations": ["{text}"]}}' }}]}
+    resp.json.return_value = {
+        "choices": [{"message": {"content": f'{{"translations": ["{text}"]}}'}}]
+    }
     resp.raise_for_status.return_value = None
     return resp
 
@@ -19,6 +21,7 @@ def _make_success_resp(text="Xin chào"):
 def _parse_fn(resp):
     """Minimal parse_fn: extract translations list from response."""
     import json
+
     content = resp.json()["choices"][0]["message"]["content"]
     return json.loads(content)["translations"]
 
@@ -36,14 +39,18 @@ def test_call_with_retry_success_first_attempt():
 def test_call_with_retry_on_network_error():
     """Test that call_with_retry retries on network errors."""
     success = _make_success_resp()
-    mock_request_fn = Mock(side_effect=[
-        requests.exceptions.ConnectionError("Network error"),
-        requests.exceptions.Timeout("Timeout"),
-        success,
-    ])
+    mock_request_fn = Mock(
+        side_effect=[
+            requests.exceptions.ConnectionError("Network error"),
+            requests.exceptions.Timeout("Timeout"),
+            success,
+        ]
+    )
 
     with patch("time.sleep"):
-        result = call_with_retry("TestEngine", mock_request_fn, _parse_fn, max_attempts=5)
+        result = call_with_retry(
+            "TestEngine", mock_request_fn, _parse_fn, max_attempts=5
+        )
 
     assert result == ["Xin chào"]
     assert mock_request_fn.call_count == 3
@@ -60,7 +67,9 @@ def test_call_with_retry_on_429():
     mock_request_fn = Mock(side_effect=[rate_limited_resp, success_resp])
 
     with patch("time.sleep") as mock_sleep:
-        result = call_with_retry("TestEngine", mock_request_fn, _parse_fn, max_attempts=3)
+        result = call_with_retry(
+            "TestEngine", mock_request_fn, _parse_fn, max_attempts=3
+        )
 
     assert result == ["Xin chào"]
     assert mock_request_fn.call_count == 2
@@ -110,7 +119,9 @@ def test_call_with_retry_exhausts_attempts_with_429():
     mock_request_fn = Mock(side_effect=[rate_limited_resp, success_resp])
 
     with patch("time.sleep"):
-        result = call_with_retry("TestEngine", mock_request_fn, _parse_fn, max_attempts=2)
+        result = call_with_retry(
+            "TestEngine", mock_request_fn, _parse_fn, max_attempts=2
+        )
 
     assert result == ["Xin chào"]
     assert mock_request_fn.call_count == 2
