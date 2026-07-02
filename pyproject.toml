@@ -5,7 +5,7 @@ description = "Translate EPUB books from English to Vietnamese using various AI 
 readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
-authors = [{name = "fonger900", email = "fonger900@gmail.com"}]
+authors = [{name = "Phong Dinh", email = "fonger900@gmail.com"}]
 keywords = ["epub", "translation", "ai", "nlp", "book", "ebook"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -18,20 +18,19 @@ classifiers = [
     "Natural Language :: Vietnamese",
 ]
 
-urls = {
-    "Homepage" = "https://github.com/fonger900/trans-epub",
-    "Repository" = "https://github.com/fonger900/trans-epub",
-}
+[project.urls]
+Homepage = "https://github.com/fonger900/trans-epub"
+Repository = "https://github.com/fonger900/trans-epub"
 
-dependencies = [
-    "ebooklib>=0.18",
-    "beautifulsoup4>=4.12",
-    "lxml>=5.2",
-    "requests>=2.32",
-    "python-dotenv>=1.0",
-    "rich>=13",
-    "tomli>=2.0.1; python_version < '3.11'",  # For TOML support in older Python versions
-]
+[project.dependencies]
+ebooklib = ">=0.18"
+beautifulsoup4 = ">=4.12"
+lxml = ">=5.2"
+requests = ">=2.32"
+python-dotenv = ">=1.0"
+rich = ">=13"
+tomli = { version = ">=2.0.1", markers = "python_version < '3.11'" }  # For TOML support in older Python versions
+importlib-metadata = { version = ">=4.6", markers = "python_version < '3.10'" }  # Backport for older Python versions
 
 [project.scripts]
 trans-epub = "trans_epub.cli:main"
