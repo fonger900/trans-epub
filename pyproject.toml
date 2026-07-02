@@ -1,11 +1,11 @@
 [project]
 name = "trans-epub"
-version = "1.1.0"
+version = "1.2.0"
 description = "Translate EPUB books from English to Vietnamese using various AI engines"
 readme = "README.md"
 requires-python = ">=3.13"
 license = {text = "MIT"}
-authors = [{name = "Phong Nguyen", email = "fonger900@gmail.com"}]
+authors = [{name = "Phong Dinh", email = "fonger900@gmail.com"}]
 keywords = ["epub", "translation", "ai", "nlp", "book", "ebook"]
 classifiers = [
     "Development Status :: 4 - Beta",

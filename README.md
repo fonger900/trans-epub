@@ -6,7 +6,6 @@
 Translate EPUB books from English to Vietnamese using AI translation engines.
 
 **Supported Engines:** Azure Translator, Google Gemini, DeepSeek, Alibaba Qwen  
-**Version**: 1.1.0
 
 ## 🚀 Features
 
