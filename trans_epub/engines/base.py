@@ -46,7 +46,7 @@ class RateLimiter:
             self._last = time.monotonic()
 
 
-_azure_limiter = RateLimiter(1.5)  # Azure free tier: ~10 req/min
+_azure_limiter = RateLimiter(6.0)  # Azure free tier: ~10 req/min
 
 # ── Engine config ──────────────────────────────────────────────────────────────
 
