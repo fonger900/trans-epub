@@ -1,18 +1,26 @@
 """Table-of-contents and nav-document translation."""
 
+import json
+
 from bs4 import BeautifulSoup
 from ebooklib import epub
 
 from .engines import ENGINES
 from .html_translator import translate_html
 
+_TOC_KEY = "__toc__"
+
 
 def translate_toc_and_nav(
     book: epub.EpubBook,
     engine: str,
+    cache: dict[str, str],
     creativity: float | None = None,
 ) -> None:
-    """Translate TOC link titles and the EPUB nav document in-place."""
+    """Translate TOC link titles and the EPUB nav document in-place.
+
+    Uses *cache* to avoid re-translating the TOC on subsequent runs.
+    """
     titles: list[str] = []
     links: list = []
 
@@ -27,13 +35,30 @@ def translate_toc_and_nav(
     walk_links(book.toc or [])
 
     if titles:
-        translated_titles = ENGINES[engine].translate(titles, creativity=creativity)
-        for link, translated in zip(links, translated_titles):
-            link.title = translated
+        cached = cache.get(_TOC_KEY)
+        if cached:
+            try:
+                translated_titles = json.loads(cached)
+                if len(translated_titles) == len(titles):
+                    for link, translated in zip(links, translated_titles):
+                        link.title = translated
+                    titles = []  # Mark as handled, skip API call
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        if titles:  # Not cached — translate via API
+            translated_titles = ENGINES[engine].translate(titles, creativity=creativity)
+            cache[_TOC_KEY] = json.dumps(translated_titles, ensure_ascii=False)
+            for link, translated in zip(links, translated_titles):
+                link.title = translated
 
     for item in book.get_items():
         if not isinstance(item, epub.EpubNav):
             continue
+        nav_name = item.get_name()
+        if nav_name in cache:
+            item.set_content(cache[nav_name].encode("utf-8"))
+            break
         content = item.get_content().decode("utf-8")
         soup = BeautifulSoup(content, "html.parser")
         # Flatten anchor text to plain strings before HTML translation
@@ -44,5 +69,6 @@ def translate_toc_and_nav(
         translated_html, _ = translate_html(
             soup.encode("utf-8"), engine, creativity=creativity
         )
+        cache[nav_name] = translated_html.decode("utf-8")
         item.set_content(translated_html)
         break
