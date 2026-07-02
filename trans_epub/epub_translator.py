@@ -21,7 +21,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from .html_translator import translate_html
+from .html_translator import count_translatable_chars, translate_html
 from .toc import translate_toc_and_nav
 
 console = Console()
@@ -121,12 +121,11 @@ def translate_epub(
     total_chars_lock = threading.Lock()
     cache_lock = threading.Lock()
 
-    # ── Pre-calculate per-chapter weights for smooth overall progress ─────────
-    # The overall bar is measured in raw-content chars (a fixed weight per item),
-    # not translatable-text chars — otherwise it would never fill, since tags,
-    # whitespace, and preserved content don't get translated.
+    # ── Pre-calculate per-chapter translatable-char counts ─────────────────────
+    # The overall bar is measured in translatable-text chars so the final count
+    # matches the "chars translated" summary.
     weights: dict[str, int] = {
-        item.get_name(): len(item.get_content().decode("utf-8", errors="replace"))
+        item.get_name(): count_translatable_chars(item.get_content())
         for _, item in work_items
     }
     overall_total_chars = sum(weights.values()) or 1  # avoid division by zero
@@ -182,13 +181,12 @@ def translate_epub(
             visible=True,
         )
 
-        # Overall bar advances in raw-content units; spread this chapter's weight
-        # across its batches so it reaches exactly `weight` when the last completes.
+        # Overall bar advances by actual translatable chars per batch so the
+        # final bar total matches the "chars translated" summary.
         weight = weights[name]
-        advanced = 0.0
 
         def on_progress(batch_num: int, total_batches: int, batch_chars: int) -> None:
-            nonlocal total_chars, advanced
+            nonlocal total_chars
             progress.update(
                 worker_tasks[wid],
                 description=(
@@ -199,9 +197,7 @@ def translate_epub(
             )
             with total_chars_lock:
                 total_chars += batch_chars
-            target = weight * batch_num / total_batches
-            progress.update(overall_task, advance=target - advanced)
-            advanced = target
+            progress.update(overall_task, advance=batch_chars)
 
         original = item.get_content()
         try:

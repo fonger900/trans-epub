@@ -25,9 +25,38 @@ ProgressCallback = Callable[[int, int, int], None]
 
 # Matches any tag that isn't an emphasis tag — used to strip everything else
 # from the LLM's output.
-_STRIP_TAGS_RE = re.compile(
-    rf"<(?!/?(?:{'|'.join(EMPHASIS_TAGS)})\b)[^>]+>", re.I
-)
+_STRIP_TAGS_RE = re.compile(rf"<(?!/?(?:{'|'.join(EMPHASIS_TAGS)})\b)[^>]+>", re.I)
+
+
+def _should_preserve(tag, preserve_tags: set[str], preserve_classes: set[str]) -> bool:
+    """Check if *tag* (or any of its ancestors) should be preserved."""
+    for current in [tag, *tag.parents]:
+        if getattr(current, "name", None) in preserve_tags:
+            return True
+        classes = current.get("class", []) if hasattr(current, "get") else []
+        if isinstance(classes, str):
+            classes = classes.split()
+        if any(cls in preserve_classes for cls in classes):
+            return True
+    return False
+
+
+def _get_translatable_nodes(soup):
+    """Return all translatable tag nodes from a BeautifulSoup *soup*."""
+    return [
+        tag
+        for tag in soup.find_all(TRANSLATE_TAGS)
+        if tag.get_text(strip=True)
+        and not tag.find(BLOCK_TAGS)
+        and not _should_preserve(tag, PRESERVE_TAGS, PRESERVE_CLASSES)
+    ]
+
+
+def count_translatable_chars(html_bytes: bytes) -> int:
+    """Count total characters in translatable text nodes (without actually translating)."""
+    soup = BeautifulSoup(html_bytes, "lxml-xml")
+    nodes = _get_translatable_nodes(soup)
+    return sum(len(_extract_text_with_emphasis(node)) for node in nodes)
 
 
 def _extract_text_with_emphasis(node: Tag) -> str:
@@ -69,25 +98,7 @@ def translate_html(
     """
     cfg = ENGINES[engine]
     soup = BeautifulSoup(html_bytes, "lxml-xml")
-
-    def should_preserve(tag) -> bool:
-        for current in [tag, *tag.parents]:
-            if getattr(current, "name", None) in PRESERVE_TAGS:
-                return True
-            classes = current.get("class", []) if hasattr(current, "get") else []
-            if isinstance(classes, str):
-                classes = classes.split()
-            if any(cls in PRESERVE_CLASSES for cls in classes):
-                return True
-        return False
-
-    nodes = [
-        tag
-        for tag in soup.find_all(TRANSLATE_TAGS)
-        if tag.get_text(strip=True)
-        and not tag.find(BLOCK_TAGS)
-        and not should_preserve(tag)
-    ]
+    nodes = _get_translatable_nodes(soup)
     if not nodes:
         return html_bytes, 0
 
