@@ -9,6 +9,16 @@ from dotenv import load_dotenv
 from .config import get_api_key, load_config
 from .epub_translator import translate_epub
 
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:
+    from importlib_metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("trans-epub")
+except PackageNotFoundError:
+    __version__ = "unknown"
+
 
 def resolve_engine(engine: str) -> str:
     """Resolve 'auto' to the first engine whose API key is present."""
@@ -47,6 +57,9 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config()
 
     parser = argparse.ArgumentParser(description="Translate EPUB EN→VI")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
     parser.add_argument("input")
     parser.add_argument("output", nargs="?")
     parser.add_argument(

@@ -1,6 +1,8 @@
 # trans-epub
 
-Dịch EPUB tiếng Anh sang tiếng Việt. Hỗ trợ ba engine: Azure Translator, Google Gemini, DeepSeek.
+Dịch EPUB tiếng Anh sang tiếng Việt. Hỗ trợ nhiều engine: Azure Translator, Google Gemini, DeepSeek, Alibaba Qwen.
+
+**Version**: 1.1.0
 
 ## Setup
 
@@ -57,6 +59,14 @@ trans-epub sach.epub -t 8
 trans-epub sach.epub -e gemini --creativity 0.8
 trans-epub sach.epub -e deepseek --creativity 0.2
 trans-epub sach.epub -e alibaba --creativity 0.5
+```
+
+## Version
+
+Check the current version:
+
+```bash
+trans-epub --version
 ```
 
 ## Resume
