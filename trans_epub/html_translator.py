@@ -2,6 +2,7 @@
 
 import re
 import time
+from typing import Callable
 
 from bs4 import BeautifulSoup
 
@@ -19,15 +20,23 @@ PRESERVE_TAGS = {"table", "style", "script"}
 # CSS classes whose subtree should never be translated
 PRESERVE_CLASSES = {"note", "footnote"}
 
+# Progress callback: (batch_number, total_batches, batch_chars)
+ProgressCallback = Callable[[int, int, int], None]
+
 
 def translate_html(
     html_bytes: bytes,
     engine: str,
     creativity: float | None = None,
+    progress_cb: ProgressCallback | None = None,
 ) -> tuple[bytes, int]:
     """Translate all translatable text nodes in *html_bytes*.
 
     Returns ``(translated_html_bytes, total_char_count)``.
+
+    If *progress_cb* is provided, it is called after each API batch completes
+    with ``(batch_number, total_batches, batch_chars)`` so the caller can
+    display per-chapter progress.
     """
     cfg = ENGINES[engine]
     soup = BeautifulSoup(html_bytes, "lxml-xml")
@@ -73,10 +82,26 @@ def translate_html(
         return html_bytes, 0
 
     char_count = sum(len(t) for t in texts)
-    translated_all: list[str] = []
-    batch: list[str] = []
-    batch_len = 0
 
+    # ── Pre-compute batches ────────────────────────────────────────────────────
+    batches: list[list[str]] = []
+    cur_batch: list[str] = []
+    cur_len = 0
+
+    for text in texts:
+        if (
+            cur_len + len(text) > cfg.char_limit or len(cur_batch) >= cfg.elem_limit
+        ) and cur_batch:
+            batches.append(cur_batch)
+            cur_batch, cur_len = [], 0
+        cur_batch.append(text)
+        cur_len += len(text)
+    if cur_batch:
+        batches.append(cur_batch)
+
+    total_batches = len(batches)
+
+    # ── Translate each batch ──────────────────────────────────────────────────
     def collapse_translation(parts: list[str]) -> str:
         return " ".join(part.strip() for part in parts if part.strip())
 
@@ -89,21 +114,13 @@ def translate_html(
         mid = len(batch_texts) // 2
         return translate_batch(batch_texts[:mid]) + translate_batch(batch_texts[mid:])
 
-    for text in texts:
-        if (
-            batch_len + len(text) > cfg.char_limit or len(batch) >= cfg.elem_limit
-        ) and batch:
-            if cfg.delay:
-                time.sleep(cfg.delay)
-            translated_all.extend(translate_batch(batch))
-            batch, batch_len = [], 0
-        batch.append(text)
-        batch_len += len(text)
-
-    if batch:
-        if cfg.delay:
+    translated_all: list[str] = []
+    for i, batch in enumerate(batches):
+        if cfg.delay and i > 0:
             time.sleep(cfg.delay)
         translated_all.extend(translate_batch(batch))
+        if progress_cb:
+            progress_cb(i + 1, total_batches, sum(len(t) for t in batch))
 
     for (child, prefix, core, suffix), translated in zip(text_nodes, translated_all):
         child.replace_with(f"{prefix}{translated}{suffix}")
