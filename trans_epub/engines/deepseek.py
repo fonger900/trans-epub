@@ -4,6 +4,8 @@ import json
 import os
 import time
 
+import requests
+
 from .base import ENGINES, extract_translations, http_session
 
 DEFAULT_DEEPSEEK_CREATIVITY = 0.4
@@ -25,21 +27,33 @@ def deepseek_translate(texts: list[str], creativity: float | None = None) -> lis
     prompt = _PROMPT_PREFIX + json.dumps({"texts": texts}, ensure_ascii=False)
 
     for attempt in range(5):
-        resp = http_session.post(
-            "https://api.deepseek.com/chat/completions",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "deepseek-v4-flash",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": temperature,
-                "max_tokens": 8192,
-                "response_format": {"type": "json_object"},
-            },
-            timeout=120,
-        )
+        try:
+            resp = http_session.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "deepseek-v4-flash",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": temperature,
+                    "max_tokens": 8192,
+                    "response_format": {"type": "json_object"},
+                },
+                timeout=120,
+            )
+        except requests.exceptions.RequestException as e:
+            wait = 2**attempt
+            print(
+                f"\n    Request error (attempt {attempt + 1}): {e}. Retrying in {wait}s...",
+                end=" ",
+                flush=True,
+            )
+            time.sleep(wait)
+            if attempt == 4:
+                raise
+            continue
         if resp.status_code == 429:
             wait = 2**attempt
             print(f"\n    Rate limited, waiting {wait}s...", end=" ", flush=True)

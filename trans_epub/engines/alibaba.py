@@ -11,13 +11,15 @@ import json
 import os
 import time
 
+import requests
+
 from .base import ENGINES, extract_translations, http_session
 
 DEFAULT_ALIBABA_CREATIVITY = 0.4
 _DEFAULT_BASE_URL = (
     "https://ws-s5gfqlikkiawofwj.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
 )
-_DEFAULT_MODEL = "qwen-plus"
+_DEFAULT_MODEL = "qwen3.7-plus"
 
 _PROMPT_PREFIX = (
     "You are a professional literary translator. Translate the following consecutive paragraphs of a book from English to Vietnamese.\n"
@@ -38,21 +40,33 @@ def alibaba_translate(texts: list[str], creativity: float | None = None) -> list
     prompt = _PROMPT_PREFIX + json.dumps({"texts": texts}, ensure_ascii=False)
 
     for attempt in range(5):
-        resp = http_session.post(
-            f"{base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": temperature,
-                "max_tokens": 8192,
-                "response_format": {"type": "json_object"},
-            },
-            timeout=120,
-        )
+        try:
+            resp = http_session.post(
+                f"{base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": temperature,
+                    "max_tokens": 8192,
+                    "response_format": {"type": "json_object"},
+                },
+                timeout=120,
+            )
+        except requests.exceptions.RequestException as e:
+            wait = 2**attempt
+            print(
+                f"\n    Request error (attempt {attempt + 1}): {e}. Retrying in {wait}s...",
+                end=" ",
+                flush=True,
+            )
+            time.sleep(wait)
+            if attempt == 4:
+                raise
+            continue
         if resp.status_code == 429:
             wait = 2**attempt
             print(f"\n    Rate limited, waiting {wait}s...", end=" ", flush=True)
