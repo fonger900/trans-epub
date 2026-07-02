@@ -30,7 +30,7 @@ from .base import (
 
 DEFAULT_ALIBABA_CREATIVITY = 0.4
 _DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-_DEFAULT_MODEL = "qwen-plus"
+_DEFAULT_MODEL = "qwen-mt-plus"
 _DEFAULT_MAX_TOKENS = 8192
 
 
