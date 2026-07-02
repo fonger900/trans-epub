@@ -13,7 +13,6 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # ── Sub-configs ───────────────────────────────────────────────────────────────
 
 
@@ -80,6 +79,7 @@ _ENGINE_KEY_ENV: dict[str, str] = {
     "gemini": "GEMINI_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
     "alibaba": "DASHSCOPE_API_KEY",
+    "google": "GOOGLE_TRANSLATE_API_KEY",
 }
 
 

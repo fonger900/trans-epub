@@ -11,7 +11,7 @@ from trans_epub.engines.base import EngineConfig, call_with_retry, extract_trans
 
 def test_engines_registered():
     """Test that all expected engines are registered."""
-    expected_engines = {"azure", "alibaba", "gemini", "deepseek"}
+    expected_engines = {"azure", "alibaba", "gemini", "deepseek", "google"}
     registered_engines = set(ENGINES.keys())
 
     assert expected_engines.issubset(registered_engines), (

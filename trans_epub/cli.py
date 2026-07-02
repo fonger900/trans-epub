@@ -34,9 +34,11 @@ def resolve_engine(engine: str) -> str:
         return "deepseek"
     if os.environ.get("DASHSCOPE_API_KEY"):
         return "alibaba"
+    if os.environ.get("GOOGLE_TRANSLATE_API_KEY"):
+        return "google"
 
     # Check config file
-    engines_to_check = ["azure", "gemini", "deepseek", "alibaba"]
+    engines_to_check = ["azure", "gemini", "deepseek", "alibaba", "google"]
     for engine_name in engines_to_check:
         key = get_api_key(engine_name)
         if key:
@@ -64,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--engine",
         "-e",
-        choices=["auto", "azure", "gemini", "deepseek", "alibaba"],
+        choices=["auto", "azure", "gemini", "deepseek", "alibaba", "google"],
         default=config.engine,
     )
     parser.add_argument(
