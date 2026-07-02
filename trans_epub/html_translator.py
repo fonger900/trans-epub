@@ -5,7 +5,7 @@ import time
 
 from bs4 import BeautifulSoup
 
-from .engines import ENGINES, translate_texts
+from .engines import ENGINES
 
 # Tags whose text content should be translated
 TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}
@@ -29,7 +29,7 @@ def translate_html(
 
     Returns ``(translated_html_bytes, total_char_count)``.
     """
-    _, char_limit, elem_limit, delay = ENGINES[engine]
+    cfg = ENGINES[engine]
     soup = BeautifulSoup(html_bytes, "lxml-xml")
 
     def should_preserve(tag) -> bool:
@@ -81,7 +81,7 @@ def translate_html(
         return " ".join(part.strip() for part in parts if part.strip())
 
     def translate_batch(batch_texts: list[str]) -> list[str]:
-        result = translate_texts(engine, batch_texts, creativity=creativity)
+        result = cfg.translate(batch_texts, creativity=creativity)
         if len(result) == len(batch_texts):
             return result
         if len(batch_texts) == 1:
@@ -90,17 +90,19 @@ def translate_html(
         return translate_batch(batch_texts[:mid]) + translate_batch(batch_texts[mid:])
 
     for text in texts:
-        if (batch_len + len(text) > char_limit or len(batch) >= elem_limit) and batch:
-            if delay:
-                time.sleep(delay)
+        if (
+            batch_len + len(text) > cfg.char_limit or len(batch) >= cfg.elem_limit
+        ) and batch:
+            if cfg.delay:
+                time.sleep(cfg.delay)
             translated_all.extend(translate_batch(batch))
             batch, batch_len = [], 0
         batch.append(text)
         batch_len += len(text)
 
     if batch:
-        if delay:
-            time.sleep(delay)
+        if cfg.delay:
+            time.sleep(cfg.delay)
         translated_all.extend(translate_batch(batch))
 
     for (child, prefix, core, suffix), translated in zip(text_nodes, translated_all):

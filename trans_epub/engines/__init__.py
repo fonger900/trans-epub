@@ -6,6 +6,8 @@ from .alibaba import alibaba_translate  # noqa: F401
 from .azure import azure_translate  # noqa: F401
 from .base import (  # noqa: F401
     ENGINES,
+    LLM_PROMPT,
+    EngineConfig,
     extract_translations,
     http_session,
     translate_texts,

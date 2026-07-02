@@ -10,8 +10,19 @@ Public API:
   main             — CLI entry point
 """
 
-from .engines import ENGINES, extract_translations, translate_texts, http_session  # noqa: F401
-from .html_translator import translate_html, TRANSLATE_TAGS, PRESERVE_TAGS, PRESERVE_CLASSES  # noqa: F401
-from .toc import translate_toc_and_nav  # noqa: F401
-from .epub_translator import translate_epub, get_spine_items  # noqa: F401
 from .cli import main, resolve_engine  # noqa: F401
+from .engines import (  # noqa: F401
+    ENGINES,
+    EngineConfig,
+    extract_translations,
+    http_session,
+    translate_texts,
+)
+from .epub_translator import get_spine_items, translate_epub  # noqa: F401
+from .html_translator import (  # noqa: F401
+    PRESERVE_CLASSES,
+    PRESERVE_TAGS,
+    TRANSLATE_TAGS,
+    translate_html,
+)
+from .toc import translate_toc_and_nav  # noqa: F401

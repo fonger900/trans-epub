@@ -4,10 +4,10 @@ import os
 import time
 import uuid
 
-from .base import ENGINES, http_session
+from .base import ENGINES, EngineConfig, http_session
 
 
-def azure_translate(texts: list[str]) -> list[str]:
+def azure_translate(texts: list[str], **_kwargs) -> list[str]:
     key = os.environ["AZURE_TRANSLATOR_KEY"]
     region = os.environ.get("AZURE_TRANSLATOR_REGION", "global")
 
@@ -35,5 +35,10 @@ def azure_translate(texts: list[str]) -> list[str]:
     resp.raise_for_status()
 
 
-# char_limit, elem_limit, inter-batch delay (seconds)
-ENGINES["azure"] = (azure_translate, 40_000, 100, 1.5)
+ENGINES["azure"] = EngineConfig(
+    name="azure",
+    translate=azure_translate,
+    char_limit=40_000,
+    elem_limit=100,
+    delay=1.5,
+)

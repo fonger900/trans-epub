@@ -2,17 +2,14 @@
 
 import json
 import os
-import time
 
-from .base import ENGINES, extract_translations, http_session
-
-_PROMPT_PREFIX = (
-    "You are a professional literary translator. Translate the following consecutive paragraphs of a book from English to Vietnamese.\n"
-    "Guidelines:\n"
-    "- The translation must sound natural, idiomatic, and fluent in Vietnamese (thuần Việt, thoát ý).\n"
-    "- Do not translate literally (word-for-word). Adapt English idioms, passive voice, and complex structures to natural Vietnamese phrasing.\n"
-    "- Maintain the tone, style, and flow of the original text across the paragraphs (they are in consecutive order).\n"
-    "- Return a JSON object with a single key 'translations' containing the array of translated strings in the exact same order.\n\n"
+from .base import (
+    ENGINES,
+    LLM_PROMPT,
+    EngineConfig,
+    call_with_retry,
+    extract_translations,
+    http_session,
 )
 
 
@@ -22,32 +19,30 @@ def gemini_translate(texts: list[str], creativity: float | None = None) -> list[
     if creativity is not None:
         generation_config["temperature"] = creativity
 
-    prompt = _PROMPT_PREFIX + json.dumps({"texts": texts}, ensure_ascii=False)
+    prompt = LLM_PROMPT + json.dumps({"texts": texts}, ensure_ascii=False)
 
-    max_attempts = 7
-    for attempt in range(max_attempts):
-        resp = http_session.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={key}",
+    def do_request():
+        return http_session.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-3.5-flash:generateContent?key={key}",
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": generation_config,
             },
             timeout=300,
         )
-        if resp.status_code == 429:
-            wait = min(3 * 2**attempt, 60)
-            print(
-                f"\n    429: {resp.json().get('error', {}).get('message', resp.text)}"
-            )
-            print(f"    Waiting {wait}s...", end=" ", flush=True)
-            time.sleep(wait)
-            continue
-        resp.raise_for_status()
+
+    def parse(resp):
         raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         return extract_translations(raw)
 
-    raise RuntimeError("Gemini translation failed: all retries exhausted")
+    return call_with_retry("Gemini", do_request, parse)
 
 
-# char_limit, elem_limit, inter-batch delay (seconds)
-ENGINES["gemini"] = (gemini_translate, 20_000, 50, 0)
+ENGINES["gemini"] = EngineConfig(
+    name="gemini",
+    translate=gemini_translate,
+    char_limit=20_000,
+    elem_limit=50,
+    delay=0,
+)

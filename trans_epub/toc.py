@@ -3,7 +3,7 @@
 from bs4 import BeautifulSoup
 from ebooklib import epub
 
-from .engines import translate_texts
+from .engines import ENGINES
 from .html_translator import translate_html
 
 
@@ -27,7 +27,7 @@ def translate_toc_and_nav(
     walk_links(book.toc or [])
 
     if titles:
-        translated_titles = translate_texts(engine, titles, creativity=creativity)
+        translated_titles = ENGINES[engine].translate(titles, creativity=creativity)
         for link, translated in zip(links, translated_titles):
             link.title = translated
 
