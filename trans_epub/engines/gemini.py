@@ -17,7 +17,7 @@ from .base import (
     http_session,
 )
 
-_DEFAULT_MODEL = "gemini-3.5-flash"
+_DEFAULT_MODEL = "gemini-2.5-flash"
 
 # Permit all safety categories so Gemini doesn't block literary content
 _SAFETY_SETTINGS = [
