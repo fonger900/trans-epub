@@ -2,7 +2,7 @@
 
 Set GEMINI_API_KEY in your .env file.
 Optionally set GEMINI_MODEL to override the model name.
-Optionally set GEMINI_MAX_TOKENS to override max output tokens (default: 8192).
+Optionally set GEMINI_MAX_TOKENS to override max output tokens.
 """
 
 import json
@@ -17,9 +17,7 @@ from .base import (
     http_session,
 )
 
-DEFAULT_GEMINI_CREATIVITY = 0.4
 _DEFAULT_MODEL = "gemini-3.5-flash"
-_DEFAULT_MAX_TOKENS = 8192
 
 # Permit all safety categories so Gemini doesn't block literary content
 _SAFETY_SETTINGS = [
@@ -43,23 +41,21 @@ def gemini_translate(texts: list[str], creativity: float | None = None) -> list[
         raise RuntimeError("GEMINI_API_KEY not found in environment or config")
 
     model = os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
-    max_tokens = int(os.environ.get("GEMINI_MAX_TOKENS", _DEFAULT_MAX_TOKENS))
-    temperature = DEFAULT_GEMINI_CREATIVITY if creativity is None else creativity
 
-    user_text = json.dumps({"texts": texts}, ensure_ascii=False)
-    generation_config = {
-        "temperature": temperature,
-        "maxOutputTokens": max_tokens,
-        "responseMimeType": "application/json",
-    }
+    generation_config: dict = {"responseMimeType": "application/json"}
+    if creativity is not None:
+        generation_config["temperature"] = creativity
+    if max_tokens := os.environ.get("GEMINI_MAX_TOKENS"):
+        generation_config["maxOutputTokens"] = int(max_tokens)
+
+    prompt = LLM_PROMPT + json.dumps({"texts": texts}, ensure_ascii=False)
 
     def do_request():
         return http_session.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent?key={key}",
             json={
-                "systemInstruction": {"parts": [{"text": LLM_PROMPT}]},
-                "contents": [{"parts": [{"text": user_text}]}],
+                "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": generation_config,
                 "safetySettings": _SAFETY_SETTINGS,
             },
