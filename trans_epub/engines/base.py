@@ -8,6 +8,7 @@ Shared infrastructure for all translation engines:
 - ENGINES registry  (populated by each engine module)
 """
 
+import ast
 import json
 import re
 import threading
@@ -113,7 +114,10 @@ def extract_translations(raw_json: str) -> list[str]:
             lambda m: {"\n": "\\n", "\r": "\\r", "\t": "\\t"}.get(m.group(0), ""),
             raw_json,
         )
-        data = json.loads(repaired)
+        try:
+            data = json.loads(repaired)
+        except json.JSONDecodeError:
+            data = ast.literal_eval(raw_json)
 
     if isinstance(data, list):
         return data
