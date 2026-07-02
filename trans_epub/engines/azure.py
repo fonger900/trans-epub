@@ -4,7 +4,7 @@ import os
 import time
 import uuid
 
-from .base import ENGINES, EngineConfig, http_session
+from .base import ENGINES, EngineConfig, _azure_limiter, http_session
 
 
 def azure_translate(texts: list[str], **_kwargs) -> list[str]:
@@ -19,6 +19,8 @@ def azure_translate(texts: list[str], **_kwargs) -> list[str]:
     region = os.environ.get("AZURE_TRANSLATOR_REGION", "global")
 
     for attempt in range(8):
+        if attempt == 0:
+            _azure_limiter.wait()  # throttle across all threads
         resp = http_session.post(
             "https://api.cognitive.microsofttranslator.com/translate",
             params={"api-version": "3.0", "from": "en", "to": "vi"},

@@ -10,6 +10,7 @@ Shared infrastructure for all translation engines:
 
 import json
 import re
+import threading
 import time
 from dataclasses import dataclass
 from typing import Callable
@@ -23,6 +24,29 @@ http_session = requests.Session()
 _adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20)
 http_session.mount("https://", _adapter)
 http_session.mount("http://", _adapter)
+
+# ── Shared rate limiter for engines with strict quotas ─────────────────────────
+
+
+class RateLimiter:
+    """Thread-safe rate limiter: ensures at least *interval* seconds between calls."""
+
+    def __init__(self, interval: float):
+        self._interval = interval
+        self._lock = threading.Lock()
+        self._last = 0.0
+
+    def wait(self) -> None:
+        """Block until the rate limit allows the next request."""
+        with self._lock:
+            now = time.monotonic()
+            wait = self._last + self._interval - now
+            if wait > 0:
+                time.sleep(wait)
+            self._last = time.monotonic()
+
+
+_azure_limiter = RateLimiter(1.5)  # Azure free tier: ~10 req/min
 
 # ── Engine config ──────────────────────────────────────────────────────────────
 
