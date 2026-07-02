@@ -26,7 +26,8 @@ def deepseek_translate(texts: list[str], creativity: float | None = None) -> lis
 
     prompt = _PROMPT_PREFIX + json.dumps({"texts": texts}, ensure_ascii=False)
 
-    for attempt in range(5):
+    max_attempts = 7
+    for attempt in range(max_attempts):
         try:
             resp = http_session.post(
                 "https://api.deepseek.com/chat/completions",
@@ -41,21 +42,21 @@ def deepseek_translate(texts: list[str], creativity: float | None = None) -> lis
                     "max_tokens": 8192,
                     "response_format": {"type": "json_object"},
                 },
-                timeout=120,
+                timeout=300,
             )
         except requests.exceptions.RequestException as e:
-            wait = 2**attempt
+            wait = min(3 * 2**attempt, 60)
             print(
-                f"\n    Request error (attempt {attempt + 1}): {e}. Retrying in {wait}s...",
+                f"\n    Request error (attempt {attempt + 1}/{max_attempts}): {e}. Retrying in {wait}s...",
                 end=" ",
                 flush=True,
             )
-            time.sleep(wait)
-            if attempt == 4:
+            if attempt == max_attempts - 1:
                 raise
+            time.sleep(wait)
             continue
         if resp.status_code == 429:
-            wait = 2**attempt
+            wait = min(3 * 2**attempt, 60)
             print(f"\n    Rate limited, waiting {wait}s...", end=" ", flush=True)
             time.sleep(wait)
             continue
@@ -65,15 +66,15 @@ def deepseek_translate(texts: list[str], creativity: float | None = None) -> lis
             return extract_translations(raw)
         except (json.JSONDecodeError, ValueError) as e:
             print(
-                f"\n    JSON parse error (attempt {attempt + 1}): {e}. Retrying...",
+                f"\n    JSON parse error (attempt {attempt + 1}/{max_attempts}): {e}. Retrying...",
                 end=" ",
                 flush=True,
             )
-            if attempt == 4:
+            if attempt == max_attempts - 1:
                 raise
             continue
 
-    resp.raise_for_status()
+    raise RuntimeError("DeepSeek translation failed: all retries exhausted")
 
 
 # char_limit, elem_limit, inter-batch delay (seconds)

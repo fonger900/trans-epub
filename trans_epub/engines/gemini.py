@@ -24,17 +24,18 @@ def gemini_translate(texts: list[str], creativity: float | None = None) -> list[
 
     prompt = _PROMPT_PREFIX + json.dumps({"texts": texts}, ensure_ascii=False)
 
-    for attempt in range(5):
+    max_attempts = 7
+    for attempt in range(max_attempts):
         resp = http_session.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={key}",
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": generation_config,
             },
-            timeout=120,
+            timeout=300,
         )
         if resp.status_code == 429:
-            wait = 2**attempt
+            wait = min(3 * 2**attempt, 60)
             print(
                 f"\n    429: {resp.json().get('error', {}).get('message', resp.text)}"
             )
@@ -45,7 +46,7 @@ def gemini_translate(texts: list[str], creativity: float | None = None) -> list[
         raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         return extract_translations(raw)
 
-    resp.raise_for_status()
+    raise RuntimeError("Gemini translation failed: all retries exhausted")
 
 
 # char_limit, elem_limit, inter-batch delay (seconds)
