@@ -134,7 +134,10 @@ def translate_epub(
         expand=True,
     )
 
-    toc_task: TaskID = progress.add_task("[yellow]Translating TOC", total=1)
+    if only_chapters:
+        toc_task = None
+    else:
+        toc_task = progress.add_task("[yellow]Translating TOC", total=1)
     overall_task: TaskID = progress.add_task("[bold green]Overall", total=num_work)
 
     # Per-worker rows — one per thread, shown only while active
@@ -227,9 +230,11 @@ def translate_epub(
     failed: list[tuple[str, str]] = []
 
     with progress:
-        # TOC phase — visible spinner while translating table of contents
-        translate_toc_and_nav(book, engine, creativity=creativity)
-        progress.update(toc_task, advance=1, visible=False)
+        # TOC phase — skip when --items is used (TOC already translated in prior full run)
+        if not only_chapters:
+            translate_toc_and_nav(book, engine, creativity=creativity)
+            assert toc_task is not None
+            progress.update(toc_task, advance=1, visible=False)
 
         if threads > 1:
             with ThreadPoolExecutor(max_workers=threads) as executor:
