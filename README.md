@@ -25,7 +25,7 @@ Translate EPUB books from English to Vietnamese using AI translation engines.
 
 ```bash
 # Clone the repository
-git clone https://github.com/phongnhhk/trans-epub.git
+git clone https://github.com/fonger900/trans-epub.git
 cd trans-epub
 
 # Install dependencies
