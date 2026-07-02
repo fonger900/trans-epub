@@ -129,11 +129,18 @@ def translate_html(
         return " ".join(part.strip() for part in parts if part.strip())
 
     def translate_batch(batch_texts: list[str]) -> list[str]:
-        result = cfg.translate(batch_texts, creativity=creativity)
-        if len(result) == len(batch_texts):
-            return result
+        try:
+            result = cfg.translate(batch_texts, creativity=creativity)
+            if len(result) == len(batch_texts):
+                return result
+            # Mismatched count — split and retry
+        except Exception:
+            # API failure (400, JSON parse, etc.) — split and retry
+            pass
+
         if len(batch_texts) == 1:
-            return [collapse_translation(result)]
+            # Single element failed — return original text as fallback
+            return [collapse_translation(batch_texts)]
         mid = len(batch_texts) // 2
         return translate_batch(batch_texts[:mid]) + translate_batch(batch_texts[mid:])
 

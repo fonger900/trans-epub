@@ -143,6 +143,10 @@ def call_with_retry(
             time.sleep(wait)
             continue
 
+        if 400 <= resp.status_code < 500 and resp.status_code != 429:
+            # 4xx (except 429) = bad request, retrying won't help
+            resp.raise_for_status()
+
         resp.raise_for_status()
 
         try:
