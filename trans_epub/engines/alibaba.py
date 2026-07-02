@@ -21,7 +21,7 @@ DEFAULT_ALIBABA_CREATIVITY = 0.4
 _DEFAULT_BASE_URL = (
     "https://ws-s5gfqlikkiawofwj.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
 )
-_DEFAULT_MODEL = "qwen3.7-plus"
+_DEFAULT_MODEL = "qwen-mt-plus"
 
 
 def alibaba_translate(texts: list[str], creativity: float | None = None) -> list[str]:
