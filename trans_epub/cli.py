@@ -18,9 +18,11 @@ def resolve_engine(engine: str) -> str:
         return "gemini"
     if os.environ.get("DEEPSEEK_API_KEY"):
         return "deepseek"
+    if os.environ.get("DASHSCOPE_API_KEY"):
+        return "alibaba"
     raise RuntimeError(
         "No translation API key found. "
-        "Set AZURE_TRANSLATOR_KEY, GEMINI_API_KEY, or DEEPSEEK_API_KEY."
+        "Set AZURE_TRANSLATOR_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, or DASHSCOPE_API_KEY."
     )
 
 
@@ -32,10 +34,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--engine",
         "-e",
-        choices=["auto", "azure", "gemini", "deepseek"],
+        choices=["auto", "azure", "gemini", "deepseek", "alibaba"],
         default="auto",
     )
-    parser.add_argument("--items", "-i", help="Spine item numbers to translate, e.g. 1,3,5 or 2-6 or 1,3-5,8 (see --list)")
+    parser.add_argument(
+        "--items",
+        "-i",
+        help="Spine item numbers to translate, e.g. 1,3,5 or 2-6 or 1,3-5,8 (see --list)",
+    )
     parser.add_argument("--list", "-l", action="store_true")
     parser.add_argument(
         "--threads",
@@ -47,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--creativity",
         type=float,
-        help="Model creativity/temperature for Gemini and DeepSeek",
+        help="Model creativity/temperature for Gemini, DeepSeek, and Alibaba",
     )
     args = parser.parse_args(argv)
 

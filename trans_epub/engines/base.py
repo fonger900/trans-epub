@@ -63,7 +63,7 @@ def translate_texts(
 ) -> list[str]:
     """Dispatch translation to the appropriate engine function."""
     translate_fn, _, _, _ = ENGINES[engine]
-    if engine in ("gemini", "deepseek"):
+    if engine in ("gemini", "deepseek", "alibaba"):
         return translate_fn(texts, creativity=creativity)
     return translate_fn(texts)
 
