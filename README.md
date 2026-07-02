@@ -1,166 +1,158 @@
 # trans-epub
 
-Dịch EPUB tiếng Anh sang tiếng Việt. Hỗ trợ nhiều engine: Azure Translator, Google Gemini, DeepSeek, Alibaba Qwen.
+Convert EPUB books from English to Vietnamese using AI translation engines.
 
+**Supported Engines:** Azure Translator, Google Gemini, DeepSeek, Alibaba Qwen  
 **Version**: 1.1.0
 
-## Setup
+## Installation
 
-1. Cài dependencies:
-
+1. Install dependencies:
 ```bash
 uv sync
 ```
 
-2. Tạo file `.env` và điền API key của engine muốn dùng:
+## Authentication
 
+1. Copy and edit the environment file:
 ```bash
 cp .env.example .env
 ```
 
-| Biến | Engine |
-|---|---|
-| `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION` | Azure Translator (free tier: 2M ký tự/tháng) |
-| `GEMINI_API_KEY` | Google Gemini |
-| `DEEPSEEK_API_KEY` | DeepSeek |
-| `DASHSCOPE_API_KEY` | Alibaba Cloud Model Studio |
-| `DASHSCOPE_API_BASE` | (optional) Custom Alibaba workspace endpoint |
+2. Fill in your API key for at least one engine:
 
-**Note:** Non-secret configuration (threads, creativity, models, etc.) goes in config.toml file.
-Secret values (API keys) go in .env file.
+| Variable | Engine | Notes |
+|----------|--------|-------|
+| `AZURE_TRANSLATOR_KEY` | Azure Translator | Free tier: 2M chars/month |
+| `AZURE_TRANSLATOR_REGION` | Azure Translator | Optional, default: `global` |
+| `GEMINI_API_KEY` | Google Gemini | |
+| `DEEPSEEK_API_KEY` | DeepSeek | |
+| `DASHSCOPE_API_KEY` | Alibaba DashScope | Required for Alibaba |
+| `DASHSCOPE_API_BASE` | Alibaba DashScope | Optional, custom endpoint |
+| `DASHSCOPE_WORKSPACE_ID` | Alibaba DashScope | Optional, for workspace deployments |
 
-Chỉ cần set key của một engine là đủ.
+**Important:** Only API keys go in `.env` (secrets). Configuration options like threads, creativity, and models go in the config file (see below).
 
-## Dùng
-
-```bash
-# Dịch toàn bộ (tự chọn engine từ key có sẵn)
-trans-epub sach.epub
-
-# Chỉ định file output
-trans-epub sach.epub output.epub
-
-# Xem danh sách spine items (để biết số thứ tự dùng với -i)
-trans-epub sach.epub --list
-
-# Dịch item cụ thể
-trans-epub sach.epub -i 3        # item 3
-trans-epub sach.epub -i 1,3,5    # item 1, 3, 5
-trans-epub sach.epub -i 2-6      # item 2 đến 6
-trans-epub sach.epub -i 1,3-5,8  # kết hợp
-
-# Chọn engine
-trans-epub sach.epub -e gemini
-trans-epub sach.epub -e azure
-trans-epub sach.epub -e deepseek
-trans-epub sach.epub -e alibaba
-
-# Số thread song song (mặc định: 4)
-trans-epub sach.epub -t 8
-
-# Chỉnh độ sáng tạo của model (Gemini, DeepSeek, và Alibaba)
-trans-epub sach.epub -e gemini --creativity 0.8
-trans-epub sach.epub -e deepseek --creativity 0.2
-trans-epub sach.epub -e alibaba --creativity 0.5
-```
-
-## Version
-
-Check the current version:
+## Basic Usage
 
 ```bash
-trans-epub --version
+# Translate entire book (auto-detect engine from available key)
+trans-epub book.epub
+
+# Specify output file
+trans-epub book.epub translated_book.epub
+
+# Select specific engine
+trans-epub book.epub -e azure
+trans-epub book.epub -e alibaba
+trans-epub book.epub -e gemini
+trans-epub book.epub -e deepseek
+
+# Parallel processing (default: 4 threads)
+trans-epub book.epub -t 8
+
+# Adjust model creativity (for LLM engines: Gemini, DeepSeek, Alibaba)
+trans-epub book.epub -e alibaba --creativity 0.5
 ```
 
-## Resume
+## Advanced Usage
 
-Mỗi item dịch xong được lưu vào `output.epub.cache.json`. Nếu bị ngắt giữa chừng, chạy lại lệnh cũ sẽ bỏ qua các item đã dịch. Cache tự xóa khi dịch xong toàn bộ; khi dùng `-i` thì cache giữ lại để có thể chạy tiếp.
-
-## Configuration
-
-Trans-epub supports configuration via TOML files for managing API keys, defaults, and preferences.
-
-### Alibaba Engine Specific Options
-
-The Alibaba engine now supports additional configuration options:
-
-- `DASHSCOPE_MAX_TOKENS`: Override the maximum tokens (default: 8192)
-- `DASHSCOPE_WORKSPACE_ID`: Set custom workspace ID for private deployments
-- `DASHSCOPE_API_BASE`: Directly override the full API endpoint (takes precedence over WORKSPACE_ID)
-- Model selection: Use `DASHSCOPE_MODEL` to select from different Qwen variants
-  - `qwen-max`: Larger context, higher quality, higher cost
-  - `qwen-plus`: Balanced performance
-  - `qwen-turbo`: Fast, economical for simple translations
-  - `qwen-mt-plus`: Optimized for machine translation tasks
-
-For custom workspace deployments, set the workspace ID:
-
+### Chapter Selection
 ```bash
-export DASHSCOPE_WORKSPACE_ID=your-workspace-id-here
+# List all chapters with numbers
+trans-epub book.epub --list
+
+# Translate specific chapters
+trans-epub book.epub -i 3        # Chapter 3 only
+trans-epub book.epub -i 1,3,5    # Chapters 1, 3, and 5
+trans-epub book.epub -i 2-6      # Chapters 2 through 6
+trans-epub book.epub -i 1,3-5,8  # Mixed selection
 ```
 
-For complex books, consider using `qwen-max` with adjusted batching settings:
+### Resume Interrupted Translations
+Each translated chapter is cached in `output.epub.cache.json`. If interrupted, re-run the same command to resume where you left off.
 
-```toml
-[engines.alibaba]
-model = "qwen-max"
-char_limit = 8000
-creativity = 0.3
-```
+Cache is automatically deleted when translation completes. Use `-i` to keep cache for resumable work.
 
 ## Configuration
 
 ### Setup
-
 Create a configuration file at one of these locations:
-
 - `./.trans-epub/config.toml` (project-specific)
 - `~/.config/trans-epub/config.toml` (user-global)
 
-Use the provided example as a starting point:
-
+Use the example file as a starting point:
 ```bash
 cp .trans-epub/config.example.toml ~/.config/trans-epub/config.toml
 ```
 
-### Configuration Options
+### Common Configuration Options
 
-#### Default Settings
+**Default Settings:**
+```toml
+[defaults]
+engine = "azure"        # Default engine (azure/alibaba/gemini/deepseek)
+threads = 4            # Parallel translation threads
+creativity = 0.3       # Default creativity (0.0-1.0) for LLM engines
+timeout = 300          # API call timeout in seconds
+```
 
-- `engine`: Default translation engine (azure, alibaba, gemini, deepseek)
-- `threads`: Number of concurrent translation threads
-- `creativity`: Default creativity for LLM engines (0.0-1.0)
-- `timeout`: Timeout for API calls in seconds
+**Engine-Specific Settings:**
+```toml
+[engines.alibaba]
+model = "qwen-plus"    # Model variant
+creativity = 0.4       # Default creativity for this engine
+char_limit = 8000      # Max chars per API request
 
-#### Engine-Specific Keys
+[engines.gemini]
+model = "gemini-3.5-flash"
+creativity = 0.3
 
-Each engine section supports:
+[batching]
+char_limit = 10000     # Default max characters per batch
+elem_limit = 25        # Default max elements per batch
+delay = 0.0            # Delay between API calls (rate limiting)
 
-- `api_key`: API key (can also be set via environment variables)
-- `base_url`: API endpoint URL
-- `model`: Model name to use
-- `creativity`: Default creativity for this engine
-- `char_limit`, `elem_limit`: Batching limits
+[caching]
+enabled = true         # Enable translation caching
+ttl_days = 30          # Cache expiration (0 = never expire)
+location = "./cache"   # Cache directory
+```
 
-#### Batching
+### Alibaba Engine Specifics
 
-Controls how text is chunked for API calls:
+The Alibaba engine supports multiple model variants:
+- `qwen-max`: Large context, high quality, higher cost
+- `qwen-plus`: Balanced performance 
+- `qwen-turbo`: Fast, economical
+- `qwen-mt-plus`: Optimized for machine translation
 
-- `char_limit`: Max characters per batch
-- `elem_limit`: Max HTML elements per batch
-- `delay`: Delay between API calls (for rate limiting)
+For workspace deployments:
+```bash
+export DASHSCOPE_WORKSPACE_ID=your-workspace-id
+```
 
-#### Caching
+## Environment Variable Override
 
-- `enabled`: Whether caching is enabled
-- `ttl_days`: Days before cache expires (0 = never expire)
-- `location`: Where to store cache files
+You can override config file settings with environment variables:
 
-### Environment Variable Precedence
+- `TRANS_EPUB_ENGINE` - Default engine
+- `TRANS_EPUB_THREADS` - Thread count  
+- `TRANS_EPUB_CREATIVITY` - Creativity value
+- `TRANS_EPUB_TIMEOUT` - Timeout in seconds
 
-Environment variables override configuration file settings:
+## Version Information
 
-- `TRANS_EPUB_ENGINE`: Default engine
-- `TRANS_EPUB_THREADS`: Thread count
-- `TRANS_EPUB_CREATIVITY`: Creativity value
-- `AZURE_TRANSLATOR_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `DASHSCOPE_API_KEY`: API keys
+Check the current version:
+```bash
+trans-epub --version
+```
+
+## Cost Optimization Tips
+
+- **Azure Translator** (~$25/Million chars): Cheapest for high volume
+- **Alibaba Qwen** (~$0.80/Million chars): Good quality-to-cost ratio  
+- **DeepSeek** (~$2/Million chars): Often has free tier
+- **Gemini** (~$1.50/Million chars): High quality
+
+Use caching and selective chapter translation to minimize costs during testing.
