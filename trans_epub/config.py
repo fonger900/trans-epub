@@ -80,6 +80,7 @@ _ENGINE_KEY_ENV: dict[str, str] = {
     "deepseek": "DEEPSEEK_API_KEY",
     "alibaba": "DASHSCOPE_API_KEY",
     "google": "GOOGLE_TRANSLATE_API_KEY",
+    "deepl": "DEEPL_API_KEY",
 }
 
 
