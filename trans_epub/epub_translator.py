@@ -1,7 +1,9 @@
 """Top-level EPUB translation orchestration."""
 
+import io
 import json
 import threading
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -39,6 +41,31 @@ class _DoneOrSpinner(ProgressColumn):
             return Text("✓", style="bold green")
         # delegate to SpinnerColumn for the animated spinner
         return self._spinner.render(task)
+
+
+def _repack_epub(path: str) -> None:
+    """Rewrite the epub zip in-place to fix CRC mismatches from ebooklib.
+
+    ebooklib sometimes writes zip entries with incorrect CRC-32 values.
+    Re-reading and rewriting every entry through Python's zipfile fixes it.
+    The mimetype entry must be first and uncompressed per the EPUB spec.
+    """
+    original = Path(path).read_bytes()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(original), "r") as src, \
+         zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        # mimetype must be first and stored uncompressed
+        if "mimetype" in src.namelist():
+            dst.writestr(
+                zipfile.ZipInfo("mimetype"),
+                src.read("mimetype"),
+                compress_type=zipfile.ZIP_STORED,
+            )
+        for item in src.infolist():
+            if item.filename == "mimetype":
+                continue
+            dst.writestr(item.filename, src.read(item.filename))
+    Path(path).write_bytes(buf.getvalue())
 
 
 def get_spine_items(book: epub.EpubBook) -> list:
@@ -212,6 +239,7 @@ def translate_epub(
 
     # Always write — preserve whatever was translated even on partial failure
     epub.write_epub(output_path, book)
+    _repack_epub(output_path)
     if not only_chapters and not failed:
         cache_path.unlink(missing_ok=True)
 
