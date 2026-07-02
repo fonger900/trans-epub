@@ -16,9 +16,11 @@ from pathlib import Path
 
 # ── Sub-configs ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class EngineConfig:
     """Per-engine overrides (API key, base URL, model, creativity)."""
+
     api_key: str | None = None
     base_url: str | None = None
     model: str | None = None
@@ -28,6 +30,7 @@ class EngineConfig:
 @dataclass
 class BatchingConfig:
     """Controls batching behaviour when calling translation APIs."""
+
     char_limit: int = 10_000
     elem_limit: int = 25
     delay: float = 0.0
@@ -36,6 +39,7 @@ class BatchingConfig:
 @dataclass
 class CachingConfig:
     """Controls the translation cache."""
+
     enabled: bool = True
     ttl_days: int = 30
     location: str = "."  # directory to write *.cache.json files
@@ -44,6 +48,7 @@ class CachingConfig:
 @dataclass
 class UIConfig:
     """UI / progress-bar settings."""
+
     progress_refresh_rate: float = 10.0  # Hz
     verbose: bool = False
 
@@ -51,6 +56,7 @@ class UIConfig:
 @dataclass
 class GlobalConfig:
     """Top-level configuration object."""
+
     engine: str = "auto"
     threads: int = 4
     creativity: float | None = None
@@ -78,6 +84,7 @@ _ENGINE_KEY_ENV: dict[str, str] = {
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def load_config(path: Path | None = None) -> GlobalConfig:
     """Load configuration from *path*, the default search paths, or env vars.
@@ -132,6 +139,7 @@ def get_api_key(engine: str) -> str | None:
 
 
 # ── TOML loading (stdlib tomllib, Python 3.11+) ───────────────────────────────
+
 
 def _apply_toml(cfg: GlobalConfig, path: Path) -> None:
     """Parse *path* as TOML and apply values to *cfg* in-place."""

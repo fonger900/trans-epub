@@ -36,7 +36,6 @@ def resolve_engine(engine: str) -> str:
         return "alibaba"
 
     # Check config file
-    config = load_config()
     engines_to_check = ["azure", "gemini", "deepseek", "alibaba"]
     for engine_name in engines_to_check:
         key = get_api_key(engine_name)
