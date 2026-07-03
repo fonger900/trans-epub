@@ -13,8 +13,6 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# ── Sub-configs ───────────────────────────────────────────────────────────────
-
 
 @dataclass
 class EngineConfig:
@@ -27,43 +25,13 @@ class EngineConfig:
 
 
 @dataclass
-class BatchingConfig:
-    """Controls batching behaviour when calling translation APIs."""
-
-    char_limit: int = 10_000
-    elem_limit: int = 25
-    delay: float = 0.0
-
-
-@dataclass
-class CachingConfig:
-    """Controls the translation cache."""
-
-    enabled: bool = True
-    ttl_days: int = 30
-    location: str = "."  # directory to write *.cache.json files
-
-
-@dataclass
-class UIConfig:
-    """UI / progress-bar settings."""
-
-    progress_refresh_rate: float = 10.0  # Hz
-    verbose: bool = False
-
-
-@dataclass
 class GlobalConfig:
     """Top-level configuration object."""
 
     engine: str = "auto"
     threads: int = 4
     creativity: float | None = None
-    timeout: int = 300
     engines: dict[str, EngineConfig] = field(default_factory=dict)
-    batching: BatchingConfig = field(default_factory=BatchingConfig)
-    caching: CachingConfig = field(default_factory=CachingConfig)
-    ui: UIConfig = field(default_factory=UIConfig)
 
 
 # ── Default search paths ──────────────────────────────────────────────────────
@@ -122,11 +90,6 @@ def load_config(path: Path | None = None) -> GlobalConfig:
             cfg.creativity = float(env_creativity)
         except ValueError:
             pass
-    if env_timeout := os.environ.get("TRANS_EPUB_TIMEOUT"):
-        try:
-            cfg.timeout = int(env_timeout)
-        except ValueError:
-            pass
 
     return cfg
 
@@ -164,8 +127,6 @@ def _apply_toml(cfg: GlobalConfig, path: Path) -> None:
         cfg.threads = int(defaults["threads"])
     if "creativity" in defaults:
         cfg.creativity = float(defaults["creativity"])
-    if "timeout" in defaults:
-        cfg.timeout = int(defaults["timeout"])
 
     # [engines.<name>] sections
     for eng_name, eng_data in data.get("engines", {}).items():
@@ -179,28 +140,3 @@ def _apply_toml(cfg: GlobalConfig, path: Path) -> None:
         if "creativity" in eng_data:
             ec.creativity = float(eng_data["creativity"])
         cfg.engines[eng_name] = ec
-
-    # [batching] section
-    batching = data.get("batching", {})
-    if "char_limit" in batching:
-        cfg.batching.char_limit = int(batching["char_limit"])
-    if "elem_limit" in batching:
-        cfg.batching.elem_limit = int(batching["elem_limit"])
-    if "delay" in batching:
-        cfg.batching.delay = float(batching["delay"])
-
-    # [caching] section
-    caching = data.get("caching", {})
-    if "enabled" in caching:
-        cfg.caching.enabled = bool(caching["enabled"])
-    if "ttl_days" in caching:
-        cfg.caching.ttl_days = int(caching["ttl_days"])
-    if "location" in caching:
-        cfg.caching.location = str(caching["location"])
-
-    # [ui] section
-    ui = data.get("ui", {})
-    if "progress_refresh_rate" in ui:
-        cfg.ui.progress_refresh_rate = float(ui["progress_refresh_rate"])
-    if "verbose" in ui:
-        cfg.ui.verbose = bool(ui["verbose"])

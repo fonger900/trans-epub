@@ -6,22 +6,20 @@ from pathlib import Path
 
 import pytest
 
-from trans_epub.config import get_api_key, load_config
+from trans_epub.config import EngineConfig, GlobalConfig, get_api_key, load_config
 
 
 def test_load_default_config():
     """Test loading config with default values."""
     config = load_config(None)  # Should load defaults
 
-    # Check default values
     assert config.engine in ["auto", "azure", "alibaba", "gemini", "deepseek"]
     assert config.threads == 4
-    assert config.timeout == 300
+    assert config.creativity is None
 
 
 def test_load_config_from_env_vars():
     """Test that environment variables override config."""
-    # Temporarily set environment variables
     original_engine = os.environ.get("TRANS_EPUB_ENGINE")
     original_threads = os.environ.get("TRANS_EPUB_THREADS")
 
@@ -35,7 +33,6 @@ def test_load_config_from_env_vars():
         assert config.threads == 8
 
     finally:
-        # Restore original environment
         if original_engine is not None:
             os.environ["TRANS_EPUB_ENGINE"] = original_engine
         elif "TRANS_EPUB_ENGINE" in os.environ:
@@ -49,104 +46,50 @@ def test_load_config_from_env_vars():
 
 def test_get_api_key_from_env():
     """Test that API keys can be retrieved from environment."""
-    # Temporarily set an API key
-    original_key = os.environ.get("TEST_API_KEY_VAR")
+    original_key = os.environ.get("DASHSCOPE_API_KEY")
 
     try:
-        os.environ["TEST_API_KEY_VAR"] = "test_api_key_value"
-
-        # Mock the function to use our test variable
-        from unittest.mock import patch
-
-        with patch("trans_epub.config.os.getenv") as mock_getenv:
-            mock_getenv.side_effect = lambda key, default=None: {
-                "TEST_API_KEY_VAR": "test_api_key_value",
-                "TRANS_EPUB_TEST_ENGINE_KEY": "test_api_key_value",
-                "DASHSCOPE_API_KEY": None,
-                "GEMINI_API_KEY": None,
-                "DEEPSEEK_API_KEY": None,
-                "AZURE_TRANSLATOR_KEY": None,
-            }.get(key, default)
-
-            # This is hard to test without knowing the exact environment var patterns
-            # Just test that the function doesn't crash
-            pass
-
+        os.environ["DASHSCOPE_API_KEY"] = "test_key_value"
+        assert get_api_key("alibaba") == "test_key_value"
     finally:
         if original_key is not None:
-            os.environ["TEST_API_KEY_VAR"] = original_key
-        elif "TEST_API_KEY_VAR" in os.environ:
-            del os.environ["TEST_API_KEY_VAR"]
+            os.environ["DASHSCOPE_API_KEY"] = original_key
+        elif "DASHSCOPE_API_KEY" in os.environ:
+            del os.environ["DASHSCOPE_API_KEY"]
 
 
 def test_config_structures():
     """Test that config classes have expected attributes."""
-    from trans_epub.config import (
-        BatchingConfig,
-        CachingConfig,
-        EngineConfig,
-        GlobalConfig,
-        UIConfig,
-    )
-
-    # Test EngineConfig
     engine_cfg = EngineConfig()
     assert hasattr(engine_cfg, "api_key")
     assert hasattr(engine_cfg, "base_url")
     assert hasattr(engine_cfg, "model")
     assert hasattr(engine_cfg, "creativity")
 
-    # Test BatchingConfig
-    batch_cfg = BatchingConfig()
-    assert hasattr(batch_cfg, "char_limit")
-    assert hasattr(batch_cfg, "elem_limit")
-    assert hasattr(batch_cfg, "delay")
-
-    # Test CachingConfig
-    cache_cfg = CachingConfig()
-    assert hasattr(cache_cfg, "enabled")
-    assert hasattr(cache_cfg, "ttl_days")
-    assert hasattr(cache_cfg, "location")
-
-    # Test UIConfig
-    ui_cfg = UIConfig()
-    assert hasattr(ui_cfg, "progress_refresh_rate")
-    assert hasattr(ui_cfg, "verbose")
-
-    # Test GlobalConfig
     global_cfg = GlobalConfig()
     assert hasattr(global_cfg, "engine")
     assert hasattr(global_cfg, "threads")
     assert hasattr(global_cfg, "creativity")
-    assert hasattr(global_cfg, "timeout")
     assert hasattr(global_cfg, "engines")
-    assert hasattr(global_cfg, "batching")
-    assert hasattr(global_cfg, "caching")
-    assert hasattr(global_cfg, "ui")
 
 
 def test_create_sample_config_file():
-    """Test that a sample config file can be created."""
+    """Test that a sample config file can be loaded."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-        config_content = """[defaults]
-engine = "azure"
-threads = 4
-creativity = 0.3
-timeout = 300
-
-[engines.alibaba]
-api_key = "test_key"
-"""
-        f.write(config_content)
+        f.write(
+            "[defaults]\n"
+            'engine = "azure"\n'
+            "threads = 4\n"
+            "creativity = 0.3\n"
+            "\n"
+            "[engines.alibaba]\n"
+            'api_key = "test_key"\n'
+        )
         f.flush()
 
-        # Try to load the config file
-        config_path = Path(f.name)
-        config = load_config(config_path)
-
-        # Verify that the config was loaded properly
+        config = load_config(Path(f.name))
         assert config.engine == "azure"
         assert config.threads == 4
+        assert config.creativity == 0.3
 
-        # Clean up
         os.unlink(f.name)
