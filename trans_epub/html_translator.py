@@ -79,9 +79,18 @@ def _extract_text_with_emphasis(node: Tag) -> str:
     return "".join(parts).strip()
 
 
+def _flatten_texts(parts: list[str]) -> str:
+    """Join text parts, stripping empty strings."""
+    return " ".join(part.strip() for part in parts if part.strip())
+
+
 def _clean_translated(raw: str) -> str:
     """Sanitise the LLM's output: keep only known emphasis tags, strip the rest."""
     return _STRIP_TAGS_RE.sub("", raw.strip()).strip()
+
+
+# Pre-compiled regex for emphasis tag splitting
+_EMPHASIS_RE = re.compile(r"(</?(?:em|strong|b|i)\s*/?>)")
 
 
 def translate_html(
@@ -127,9 +136,6 @@ def translate_html(
     total_batches = len(batches)
 
     # ── Translate each batch ──────────────────────────────────────────────────
-    def _flatten_texts(parts: list[str]) -> str:
-        return " ".join(part.strip() for part in parts if part.strip())
-
     def translate_batch(batch_texts: list[str]) -> list[str]:
         try:
             result = cfg.translate(batch_texts, creativity=creativity)
@@ -155,8 +161,6 @@ def translate_html(
             progress_cb(i + 1, total_batches, sum(len(t) for t in batch))
 
     # Write translated content back into each element
-    _EMPHASIS_RE = re.compile(r"(</?(?:em|strong|b|i)\s*/?>)")
-
     for node, translated in zip(nodes, translated_all):
         cleaned = _clean_translated(translated)
         node.clear()
