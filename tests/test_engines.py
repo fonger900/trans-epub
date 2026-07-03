@@ -1,12 +1,10 @@
 """Tests for translation engines."""
 
-import os
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from trans_epub.engines import ENGINES
-from trans_epub.engines.base import EngineConfig, call_with_retry, extract_translations
+from trans_epub.engines.base import extract_translations
 
 
 def test_engines_registered():

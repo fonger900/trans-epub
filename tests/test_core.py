@@ -1,6 +1,5 @@
 """Core functionality tests."""
 
-import json
 from unittest.mock import MagicMock, patch
 
 from trans_epub.html_translator import translate_html

@@ -1,8 +1,5 @@
 """Tests for the CLI module."""
 
-import subprocess
-import sys
-from unittest.mock import MagicMock, patch
 
 import pytest
 

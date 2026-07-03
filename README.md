@@ -108,11 +108,7 @@ Cache is automatically deleted when a full translation completes successfully.
 
 ## Known Issues / Limitations
 
-- **Retry inconsistency**: Google Cloud Translation and DeepL engines have no retry logic. A transient network failure kills the run. Azure uses its own inline retry instead of the shared `call_with_retry`.
-- **Double throttling on Azure**: Both a `RateLimiter` (6s) and `EngineConfig.delay` (1.5s) apply, stacking to ~7.5s between requests.
-- **HTML entities not escaped**: Translated text containing literal `<` characters may be mangled during reassembly.
-- **Attributes not translated**: `alt`, `title`, `placeholder` and other HTML attributes are silently skipped.
-- **Separate `pytest.ini`** duplicates settings already in `pyproject.toml`.
+- **Attributes not translated**: `alt`, `title`, `placeholder` and other HTML attributes are silently skipped. Only visible text content is translated.
 
 ## License
 

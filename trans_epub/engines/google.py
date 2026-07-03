@@ -6,7 +6,12 @@ Optionally set GOOGLE_TRANSLATE_REGION to override the region (default: global).
 
 import os
 
-from .base import ENGINES, EngineConfig, http_session
+from .base import (
+    ENGINES,
+    EngineConfig,
+    call_with_retry,
+    http_session,
+)
 
 
 def google_translate(texts: list[str], **_kwargs) -> list[str]:
@@ -26,24 +31,28 @@ def google_translate(texts: list[str], **_kwargs) -> list[str]:
         else f"https://{region}-translation.googleapis.com/language/translate/v2"
     )
 
-    resp = http_session.post(
-        f"{host}?key={key}",
-        json={
-            "q": texts,
-            "source": "en",
-            "target": "vi",
-            "format": "text",
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if "error" in data:
-        raise RuntimeError(
-            f"Google Translate API error {data['error']['code']}: "
-            f"{data['error']['message']}"
+    def do_request():
+        return http_session.post(
+            f"{host}?key={key}",
+            json={
+                "q": texts,
+                "source": "en",
+                "target": "vi",
+                "format": "text",
+            },
+            timeout=30,
         )
-    return [t["translatedText"] for t in data["data"]["translations"]]
+
+    def parse(resp):
+        data = resp.json()
+        if "error" in data:
+            raise RuntimeError(
+                f"Google Translate API error {data['error']['code']}: "
+                f"{data['error']['message']}"
+            )
+        return [t["translatedText"] for t in data["data"]["translations"]]
+
+    return call_with_retry("Google", do_request, parse)
 
 
 ENGINES["google"] = EngineConfig(

@@ -4,7 +4,6 @@ import os
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from trans_epub.config import EngineConfig, GlobalConfig, get_api_key, load_config
 

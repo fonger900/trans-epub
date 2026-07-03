@@ -177,33 +177,15 @@ Each follows the same pattern:
 1. Define a `{name}_translate(texts, creativity=None)` function
 2. Read API key from env var or config
 3. Build request payload
-4. Optionally wrap in `call_with_retry` (gemini, deepseek, alibaba)
+4. Wrap in `call_with_retry` for retry with exponential backoff
 5. Register with `ENGINES[name] = EngineConfig(...)`
 
-**Consistency gaps**:
-- `google` and `deepl` engines have **no retry logic** — a single transient failure kills the run
-- `azure` has its own inline retry (8 attempts) instead of using `call_with_retry`
-- `azure` uses a dedicated `RateLimiter` (6s interval) in addition to `EngineConfig.delay` (1.5s) — double throttling
+All six engines (gemini, deepseek, alibaba, google, deepl, azure) use the shared `call_with_retry` from `base.py`. Azure additionally uses a dedicated `RateLimiter` (6s interval, defined in `azure.py`) for free-tier throttling.
 
 ## Known Issues
-
-### Retry inconsistency
-`google.py` and `deepl.py` lack any retry/backoff. A network blip or 429 causes a hard failure. `azure.py` has its own inline retry instead of using the shared `call_with_retry` from `base.py`.
-
-### Double throttling on Azure
-Azure uses both `_azure_limiter` (6s interval via `RateLimiter`) and `EngineConfig.delay` (1.5s). These stack to ~7.5s between requests instead of one or the other.
-
-### `collapse_translation` misnomer
-In `html_translator.py:128-129`, `collapse_translation` joins *original input* texts as a single-string fallback when the API returns a wrong count. Despite the name, it collapses inputs, not translations.
 
 ### `cached_chars` lock naming
 Updated under `total_chars_lock` in `epub_translator.py:163-164`. Works correctly but shares a lock named for a different variable.
 
-### No HTML entity escaping
-At `html_translator.py:159-163`, translated text containing literal `<` (e.g. "x < y") is fed to BeautifulSoup as an XML fragment, which can mangle the content. Safe for typical literary prose but fragile.
-
 ### Attributes not translated
 HTML attributes like `alt`, `title`, `placeholder` are silently skipped. Only visible text content is translated.
-
-### `pytest.ini` and `pyproject.toml` duplication
-Both files define the same pytest settings (`testpaths`, `python_files`, `addopts`, etc.). Only `pyproject.toml` is needed.

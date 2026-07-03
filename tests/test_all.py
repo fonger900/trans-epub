@@ -17,7 +17,7 @@ def test_imports():
         import trans_epub.engines.gemini
         import trans_epub.epub_translator
         import trans_epub.html_translator
-        import trans_epub.toc
+        import trans_epub.toc  # noqa: F401
 
         print("✓ All modules imported successfully")
     except ImportError as e:

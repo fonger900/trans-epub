@@ -1,10 +1,36 @@
 """Azure Cognitive Translator engine."""
 
 import os
+import threading
 import time
 import uuid
 
-from .base import ENGINES, EngineConfig, _azure_limiter, http_session
+from .base import (
+    ENGINES,
+    EngineConfig,
+    call_with_retry,
+    http_session,
+)
+
+
+class _AzureRateLimiter:
+    """Thread-safe rate limiter: ensures at least *interval* seconds between calls."""
+
+    def __init__(self, interval: float):
+        self._interval = interval
+        self._lock = threading.Lock()
+        self._last = 0.0
+
+    def wait(self) -> None:
+        with self._lock:
+            now = time.monotonic()
+            wait = self._last + self._interval - now
+            if wait > 0:
+                time.sleep(wait)
+            self._last = time.monotonic()
+
+
+_azure_limiter = _AzureRateLimiter(6.0)  # Azure free tier: ~10 req/min
 
 
 def azure_translate(texts: list[str], **_kwargs) -> list[str]:
@@ -18,10 +44,9 @@ def azure_translate(texts: list[str], **_kwargs) -> list[str]:
 
     region = os.environ.get("AZURE_TRANSLATOR_REGION", "global")
 
-    for attempt in range(8):
-        if attempt == 0:
-            _azure_limiter.wait()  # throttle across all threads
-        resp = http_session.post(
+    def do_request():
+        _azure_limiter.wait()
+        return http_session.post(
             "https://api.cognitive.microsofttranslator.com/translate",
             params={"api-version": "3.0", "from": "en", "to": "vi"},
             headers={
@@ -33,15 +58,11 @@ def azure_translate(texts: list[str], **_kwargs) -> list[str]:
             json=[{"text": t} for t in texts],
             timeout=30,
         )
-        if resp.status_code == 429:
-            wait = int(resp.headers.get("Retry-After", 2**attempt))
-            print(f"\n    Rate limited, waiting {wait}s...", end=" ", flush=True)
-            time.sleep(wait)
-            continue
-        resp.raise_for_status()
+
+    def parse(resp):
         return [r["translations"][0]["text"] for r in resp.json()]
 
-    resp.raise_for_status()
+    return call_with_retry("Azure", do_request, parse, max_attempts=8)
 
 
 ENGINES["azure"] = EngineConfig(
@@ -49,5 +70,5 @@ ENGINES["azure"] = EngineConfig(
     translate=azure_translate,
     char_limit=40_000,
     elem_limit=100,
-    delay=1.5,
+    delay=0,
 )

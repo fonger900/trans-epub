@@ -1,5 +1,6 @@
 """HTML translation logic."""
 
+import html as html_lib
 import re
 import time
 from typing import Callable
@@ -125,7 +126,7 @@ def translate_html(
     total_batches = len(batches)
 
     # ── Translate each batch ──────────────────────────────────────────────────
-    def collapse_translation(parts: list[str]) -> str:
+    def _flatten_texts(parts: list[str]) -> str:
         return " ".join(part.strip() for part in parts if part.strip())
 
     def translate_batch(batch_texts: list[str]) -> list[str]:
@@ -140,7 +141,7 @@ def translate_html(
 
         if len(batch_texts) == 1:
             # Single element failed — return original text as fallback
-            return [collapse_translation(batch_texts)]
+            return [_flatten_texts(batch_texts)]
         mid = len(batch_texts) // 2
         return translate_batch(batch_texts[:mid]) + translate_batch(batch_texts[mid:])
 
@@ -153,12 +154,18 @@ def translate_html(
             progress_cb(i + 1, total_batches, sum(len(t) for t in batch))
 
     # Write translated content back into each element
+    _EMPHASIS_RE = re.compile(r"(</?(?:em|strong|b|i)\s*/?>)")
+
     for node, translated in zip(nodes, translated_all):
         cleaned = _clean_translated(translated)
         node.clear()
         if "<" in cleaned:
-            # Parse the fragment so emphasis tags become real nodes
-            frag = BeautifulSoup(f"<x>{cleaned}</x>", "lxml-xml").find("x")
+            # HTML-escape text segments so literal <, >, & don't break XML parsing
+            parts = _EMPHASIS_RE.split(cleaned)
+            for i in range(0, len(parts), 2):
+                parts[i] = html_lib.escape(parts[i], quote=False)
+            escaped = "".join(parts)
+            frag = BeautifulSoup(f"<x>{escaped}</x>", "lxml-xml").find("x")
             for child in list(frag.children):
                 node.append(child)
         else:

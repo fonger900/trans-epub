@@ -7,7 +7,12 @@ Set DEEPL_API_BASE to override the endpoint.
 
 import os
 
-from .base import ENGINES, EngineConfig, http_session
+from .base import (
+    ENGINES,
+    EngineConfig,
+    call_with_retry,
+    http_session,
+)
 
 _DEFAULT_BASE = "https://api-free.deepl.com/v2/translate"
 
@@ -22,21 +27,25 @@ def deepl_translate(texts: list[str], **_kwargs) -> list[str]:
 
     base = os.environ.get("DEEPL_API_BASE", _DEFAULT_BASE)
 
-    resp = http_session.post(
-        base,
-        headers={
-            "Authorization": f"DeepL-Auth-Key {key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "text": texts,
-            "source_lang": "EN",
-            "target_lang": "VI",
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return [t["text"] for t in resp.json()["translations"]]
+    def do_request():
+        return http_session.post(
+            base,
+            headers={
+                "Authorization": f"DeepL-Auth-Key {key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "text": texts,
+                "source_lang": "EN",
+                "target_lang": "VI",
+            },
+            timeout=30,
+        )
+
+    def parse(resp):
+        return [t["text"] for t in resp.json()["translations"]]
+
+    return call_with_retry("DeepL", do_request, parse)
 
 
 ENGINES["deepl"] = EngineConfig(
