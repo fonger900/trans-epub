@@ -5,40 +5,35 @@
 
 Translate EPUB books from English to Vietnamese using AI translation engines.
 
-**Supported Engines:** Azure Translator, Google Gemini, DeepSeek, Alibaba Qwen  
+**Supported Engines:** Azure Translator, Google Gemini, DeepSeek, Alibaba Qwen, Google Cloud Translation, DeepL
 
-## 🚀 Features
+## Features
 
-- Multi-engine AI translation (Azure, Gemini, DeepSeek, Alibaba)
+- Multi-engine AI translation (6 engines)
 - Fast parallel processing with progress tracking
-- Smart caching and resume capability
-- Configurable batching and settings
+- Smart caching and resume capability — survive interruptions
+- Configurable batching, threading, and creativity/temperature
 - Workspace deployment support (Alibaba)
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Python 3.13+
 - [UV package manager](https://github.com/astral-sh/uv)
 
-## 🛠️ Installation
+## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/fonger900/trans-epub.git
 cd trans-epub
-
-# Install dependencies
 uv sync
-
-# Set up API keys
 cp .env.example .env
 # Edit .env with your API keys
 ```
 
-## 🔧 Usage
+## Usage
 
 ```bash
-# Basic translation
+# Basic translation (auto-detects engine from available API keys)
 uv run trans-epub book.epub
 
 # With specific engine
@@ -47,69 +42,82 @@ uv run trans-epub book.epub -e alibaba
 # Translate specific chapters
 uv run trans-epub book.epub -i 1-5
 
-# Check version
-uv run trans-epub --version
+# List chapters with their numbers
+uv run trans-epub book.epub --list
+
+# Custom output path
+uv run trans-epub book.epub -o translated.epub
+
+# Parallel threads
+uv run trans-epub book.epub -t 8
+
+# Creativity/temperature for LLM engines
+uv run trans-epub book.epub --creativity 0.5
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ### Authentication
-Copy `.env.example` and add your API keys:
+
+Copy `.env.example` and add API keys for your chosen engine(s):
 
 ```bash
 cp .env.example .env
 ```
 
-Supported engines:
-- `AZURE_TRANSLATOR_KEY` - Azure Translator API key
-- `GEMINI_API_KEY` - Google Gemini API key  
-- `DEEPSEEK_API_KEY` - DeepSeek API key
-- `DASHSCOPE_API_KEY` - Alibaba DashScope API key
+| Engine | Env Variable |
+|---|---|
+| Azure Translator | `AZURE_TRANSLATOR_KEY` |
+| Google Gemini | `GEMINI_API_KEY` |
+| DeepSeek | `DEEPSEEK_API_KEY` |
+| Alibaba DashScope | `DASHSCOPE_API_KEY` |
+| Google Cloud Translation | `GOOGLE_TRANSLATE_API_KEY` |
+| DeepL | `DEEPL_API_KEY` |
 
 ### Settings
-Create a configuration file at:
+
+Configuration file locations (searched in order):
 - `./.trans-epub/config.toml` (project-specific)
 - `~/.config/trans-epub/config.toml` (user-global)
 
-Example config:
-```toml
-[defaults]
-engine = "alibaba"
-threads = 4
-creativity = 0.3
+Config values are overridden by `TRANS_EPUB_*` environment variables.
 
-[engines.alibaba]
-model = "qwen-plus"
-```
+See [.trans-epub/config.example.toml](.trans-epub/config.example.toml) for all options.
 
-## 💰 Cost Optimization
+## Cost Optimization
 
-- **Azure Translator**: $25/Million chars (cheapest for bulk)
-- **Alibaba Qwen**: $0.80/Million chars (best value)  
-- **DeepSeek**: $2/Million chars (often with free tier)
-- **Google Gemini**: $1.50/Million chars (high quality)
+| Engine | Approx. Cost | Notes |
+|---|---|---|
+| Azure Translator | ~$25/million chars | Cheap for bulk, free tier: 2M chars/month |
+| Alibaba Qwen | ~$0.80/million chars | Best value, qwen-mt-plus optimized for translation |
+| DeepSeek | ~$2/million chars | Often has free tier promotions |
+| Google Gemini | ~$1.50/million chars | High quality, fast |
+| Google Cloud Translation | ~$20/million chars | Premium MT, no LLM overhead |
+| DeepL | ~$25/million chars | Free tier: 500K chars/month |
 
-## ⏸️ Resume Capability
+## Resume Capability
 
-Each translated chapter is cached in `output.epub.cache.json`. If interrupted, re-run the same command to resume where you left off.
+Each translated chapter is cached in `{output}.cache.json`. If interrupted, re-run the same command to resume where you left off.
 
-Cache is automatically deleted when translation completes. Use `-i` to keep cache for resumable work.
+Cache is automatically deleted when a full translation completes successfully.
 
-## 🌐 Alibaba Workspace Support
+## Developer Documentation
 
-For custom workspace deployments:
-```bash
-export DASHSCOPE_WORKSPACE_ID=your-workspace-id
-```
+- [Architecture](docs/architecture.md) — code structure, pipeline, threading, known issues
+- [Engines](docs/engines.md) — engine registry pattern, adding new engines, retry strategies
 
-## 🤝 Contributing
+## Known Issues / Limitations
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+- **Retry inconsistency**: Google Cloud Translation and DeepL engines have no retry logic. A transient network failure kills the run. Azure uses its own inline retry instead of the shared `call_with_retry`.
+- **Double throttling on Azure**: Both a `RateLimiter` (6s) and `EngineConfig.delay` (1.5s) apply, stacking to ~7.5s between requests.
+- **HTML entities not escaped**: Translated text containing literal `<` characters may be mangled during reassembly.
+- **Attributes not translated**: `alt`, `title`, `placeholder` and other HTML attributes are silently skipped.
+- **Separate `pytest.ini`** duplicates settings already in `pyproject.toml`.
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
-## 🆘 Support
+## Support
 
-If you encounter issues, please [open an issue](../../issues) on GitHub.
+Open an issue on GitHub.

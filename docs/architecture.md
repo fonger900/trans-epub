@@ -1,0 +1,209 @@
+# Architecture
+
+## Overview
+
+`trans-epub` reads an EPUB, translates each chapter from English to Vietnamese via a configurable AI/cloud engine, and writes a new EPUB. The design is modular with clear separation of concerns across ~1,500 lines of source code.
+
+## Directory Layout
+
+```
+trans_epub/
+├── __init__.py          # Public API re-exports (31 lines)
+├── cli.py               # Argparse entry point, --version
+├── config.py            # TOML + env var config (dataclass model)
+├── epub_translator.py   # EPUB orchestration: read, thread pool, progress, write
+├── html_translator.py   # HTML parse → extract text → batch → translate → reassemble
+├── toc.py               # TOC link titles + nav document translation
+└── engines/
+    ├── __init__.py      # Import all engines to trigger registration
+    ├── base.py          # Shared: HTTP session, EngineConfig, LLM_PROMPT, retry, registry
+    ├── alibaba.py       # Alibaba DashScope (Qwen) engine
+    ├── azure.py         # Azure Cognitive Translator engine
+    ├── deepl.py         # DeepL engine
+    ├── deepseek.py      # DeepSeek engine
+    ├── gemini.py        # Google Gemini engine
+    └── google.py        # Google Cloud Translation v2 engine
+```
+
+## Translation Pipeline
+
+```
+EPUB (.epub)
+  │
+  ▼
+epub_translator.translate_epub()
+  │
+  ├─ 1. Read EPUB with ebooklib
+  ├─ 2. Translate TOC link titles (toc.py)
+  ├─ 3. Translate nav document (toc.py → html_translator.translate_html)
+  ├─ 4. For each spine item (chapter):
+  │      │
+  │      ├─ Cache hit? → restore cached content, skip
+  │      └─ Cache miss? →
+  │            │
+  │            ├─ html_translator.translate_html()
+  │            │     ├─ Parse HTML with BeautifulSoup (lxml-xml)
+  │            │     ├─ Find all translatable nodes (p, h1-h6, li, td, th)
+  │            │     ├─ Extract text with emphasis tags intact
+  │            │     ├─ Batch by char_limit / elem_limit
+  │            │     ├─ For each batch:
+  │            │     │     ├─ Call engine.translate(batch)
+  │            │     │     ├─ On failure: bisect batch, retry sub-batches
+  │            │     │     └─ On wrong count: bisect batch, retry sub-batches
+  │            │     └─ Write translations back into HTML nodes
+  │            └─ Cache result → write .cache.json
+  │
+  ├─ 5. Write EPUB with ebooklib
+  └─ 6. Repack ZIP to fix CRC-32 mismatches
+```
+
+## Module Responsibilities
+
+### `cli.py` (122 lines)
+
+- Loads `.env` via `python-dotenv`
+- Loads config via `load_config()`
+- Parses `--items` ranges (e.g. `1-5,8`)
+- Resolves `auto` engine by checking env vars in a fixed priority order
+- Calls `translate_epub()` with parsed args
+- Returns exit code 0
+
+### `config.py` (142 lines)
+
+Two dataclasses: `GlobalConfig` (engine, threads, creativity, per-engine overrides) and `EngineConfig` (api_key, base_url, model, creativity).
+
+Load priority (highest first):
+1. `TRANS_EPUB_*` environment variables
+2. Explicit `--config` path
+3. `./.trans-epub/config.toml`
+4. `~/.config/trans-epub/config.toml`
+5. Built-in defaults
+
+API keys are sourced from environment variables only (`get_api_key()` reads `_ENGINE_KEY_ENV` mapping). Config file `api_key` fields exist in the schema but are **not wired** into `load_config`'s return — engines read keys directly from env vars.
+
+### `epub_translator.py` (276 lines)
+
+- Reads EPUB with `ebooklib.read_epub()`
+- Adds `EpubNav` if missing (ebooklib writer bug workaround)
+- Maps spine IDs → items via `get_spine_items()`
+- Translatable items processed via `ThreadPoolExecutor` (configurable `--threads`)
+- Each thread runs `process_chapter()`:
+  - Checks cache → restores or translates
+  - Uses per-worker `Rich` progress rows that appear/disappear via a free-list
+  - Writes per-chapter cache to `.cache.json` after each chapter
+- On completion: writes EPUB, repacks ZIP, optionally deletes cache on success
+- Collects failures and reports them at end; partial output is still written
+
+#### Threading Model
+
+- Fixed thread pool (`max_workers=threads`)
+- Channel-based (free-list) worker slot assignment for progress UI
+- `total_chars_lock` protects the running char count (updated from `on_progress` callback)
+- `cache_lock` protects cache reads/writes (one chapter at a time writes)
+- Worker progress rows use `lock`-protected free-list to claim/release UI slots
+
+#### Caching
+
+- Cache file: `{output}.cache.json` — JSON dict mapping item name → translated HTML
+- Written after each chapter completes (crash-safe resume)
+- Deleted on successful full translation
+- `__toc__` key for TOC titles
+- Nav document cached under its item name
+
+### `html_translator.py` (167 lines)
+
+Core HTML processing logic:
+
+**Translatable tags** (`TRANSLATE_TAGS`): `p`, `h1`-`h6`, `li`, `td`, `th`
+
+**Preserved blocks**:
+- Tags: `table`, `style`, `script` (entire subtree skipped)
+- Classes: `note`, `footnote` (entire subtree skipped, including ancestors)
+
+**Text extraction** (`_extract_text_with_emphasis`):
+- Emphasis tags (`em`, `strong`, `b`, `i`) are kept as inline markup
+- All other child tags are flattened to plain text via `get_text()`
+
+**Batching strategy**:
+- Greedy accumulation up to `EngineConfig.char_limit` or `elem_limit`
+- No overlap, no sentence splitting — whole elements only
+
+**Retry on failure** (`translate_batch`):
+- Recursive bisection: on API failure or count mismatch, split batch in half and retry each half
+- Single-element fallback: returns original text unchanged
+- Runs after all official retries are exhausted (in-engine retry via `call_with_retry`)
+
+**HTML reassembly**:
+- `_clean_translated()` strips all non-emphasis tags from LLM output
+- If cleaned text contains `<`, parsed as XML fragment for safe emphasis tag insertion
+- Otherwise inserted as plain `NavigableString`
+
+### `toc.py` (74 lines)
+
+- Walks `book.toc` tree recursively to collect all link titles
+- Translates titles in bulk via engine
+- Caches under `__toc__` key
+- Also translates `EpubNav` document by flattening anchor text and passing through `translate_html`
+
+### `engines/base.py` (202 lines)
+
+**`EngineConfig`**: Dataclass holding name, translate callable, char_limit, elem_limit, delay.
+
+**`ENGINES`**: Global `dict[str, EngineConfig]` — populated by each engine module at import time via side-effect registration.
+
+**`http_session`**: Connection-pooled `requests.Session` (pool_maxsize=20).
+
+**`RateLimiter`**: Thread-safe token-less interval limiter (used only by Azure).
+
+**`LLM_PROMPT`**: Shared system prompt for LLM-based engines (Gemini, DeepSeek, Alibaba). Instructs the model to translate EN→VI naturally, preserve emphasis tags, and return JSON.
+
+**`extract_translations(raw_json)`**: Parses LLM JSON output with repair layers:
+1. Strip markdown code fences
+2. Standard `json.loads()`
+3. Repair unescaped control characters (DeepSeek quirk)
+4. `ast.literal_eval()` fallback
+5. Accept list, or dict with `translations` key, or first list value found
+
+**`call_with_retry(engine_name, request_fn, parse_fn, max_attempts=7)`**: Generic HTTP retry loop:
+- Retries on: `RequestException` (network), 429 (rate limit), JSONDecodeError, ValueError
+- Does **not** retry on: 4xx (except 429)
+- Exponential backoff: `min(3 * 2^attempt, 60)` seconds
+- 429 uses `Retry-After` header when available
+- Re-raises on final attempt exhaustion
+
+### Engine Modules (6 files, 48–97 lines each)
+
+Each follows the same pattern:
+1. Define a `{name}_translate(texts, creativity=None)` function
+2. Read API key from env var or config
+3. Build request payload
+4. Optionally wrap in `call_with_retry` (gemini, deepseek, alibaba)
+5. Register with `ENGINES[name] = EngineConfig(...)`
+
+**Consistency gaps**:
+- `google` and `deepl` engines have **no retry logic** — a single transient failure kills the run
+- `azure` has its own inline retry (8 attempts) instead of using `call_with_retry`
+- `azure` uses a dedicated `RateLimiter` (6s interval) in addition to `EngineConfig.delay` (1.5s) — double throttling
+
+## Known Issues
+
+### Retry inconsistency
+`google.py` and `deepl.py` lack any retry/backoff. A network blip or 429 causes a hard failure. `azure.py` has its own inline retry instead of using the shared `call_with_retry` from `base.py`.
+
+### Double throttling on Azure
+Azure uses both `_azure_limiter` (6s interval via `RateLimiter`) and `EngineConfig.delay` (1.5s). These stack to ~7.5s between requests instead of one or the other.
+
+### `collapse_translation` misnomer
+In `html_translator.py:128-129`, `collapse_translation` joins *original input* texts as a single-string fallback when the API returns a wrong count. Despite the name, it collapses inputs, not translations.
+
+### `cached_chars` lock naming
+Updated under `total_chars_lock` in `epub_translator.py:163-164`. Works correctly but shares a lock named for a different variable.
+
+### No HTML entity escaping
+At `html_translator.py:159-163`, translated text containing literal `<` (e.g. "x < y") is fed to BeautifulSoup as an XML fragment, which can mangle the content. Safe for typical literary prose but fragile.
+
+### Attributes not translated
+HTML attributes like `alt`, `title`, `placeholder` are silently skipped. Only visible text content is translated.
+
+### `pytest.ini` and `pyproject.toml` duplication
+Both files define the same pytest settings (`testpaths`, `python_files`, `addopts`, etc.). Only `pyproject.toml` is needed.
