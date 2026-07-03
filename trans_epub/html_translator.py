@@ -5,7 +5,8 @@ import re
 import time
 from typing import Callable
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
+from bs4.element import NavigableString
 
 from .engines import EMPHASIS_TAGS, ENGINES
 
