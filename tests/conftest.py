@@ -1,37 +1,39 @@
-"""Test configuration and fixtures."""
+"""Shared fixtures for all tests."""
 
-import tempfile
-from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-
-@pytest.fixture
-def temp_dir():
-    """Create a temporary directory for tests."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+from trans_epub.engines import ENGINES, EngineConfig
 
 
 @pytest.fixture
-def sample_epub_content():
-    """Provide sample EPUB content for testing."""
-    return """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-    <title>Sample Chapter</title>
-</head>
-<body>
-    <h1>Chapter 1</h1>
-    <p>Hello world!</p>
-    <p>This is a test paragraph.</p>
-    <div class="note">This note should not be translated.</div>
-</body>
-</html>"""
+def mock_translate():
+    """Default mock translate: prefix each text with 'VI: '."""
+    def translate(texts, **_kwargs):
+        return [f"VI: {t}" for t in texts]
+    return translate
 
 
 @pytest.fixture
-def sample_epub_bytes(sample_epub_content):
-    """Provide sample EPUB content as bytes."""
-    return sample_epub_content.encode("utf-8")
+def mock_engine_config(mock_translate):
+    """Return a real EngineConfig wired to mock_translate."""
+    return EngineConfig(
+        name="test",
+        translate=mock_translate,
+        char_limit=10_000,
+        elem_limit=50,
+        delay=0,
+    )
+
+
+@pytest.fixture
+def mock_engines(mock_engine_config):
+    """Patch ENGINES dict so 'test' resolves to mock_engine_config."""
+    with patch.dict(ENGINES, {"test": mock_engine_config}):
+        yield
+
+
+@pytest.fixture
+def simple_html():
+    return b"<html><body><p>Hello world</p></body></html>"

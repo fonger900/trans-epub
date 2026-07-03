@@ -125,3 +125,17 @@ def test_call_with_retry_exhausts_attempts_with_429():
 
     assert result == ["Xin chào"]
     assert mock_request_fn.call_count == 2
+
+
+def test_call_with_retry_does_not_retry_4xx():
+    """400-level errors (except 429) should raise immediately, no retry."""
+    bad_resp = Mock()
+    bad_resp.status_code = 400
+    bad_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("Bad request")
+
+    mock_request_fn = Mock(return_value=bad_resp)
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        call_with_retry("TestEngine", mock_request_fn, _parse_fn, max_attempts=3)
+
+    assert mock_request_fn.call_count == 1  # only one attempt

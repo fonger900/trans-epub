@@ -1,77 +1,96 @@
-"""Tests for translation engines."""
+"""Tests for translation engine registry and shared utilities."""
 
+from unittest.mock import patch
 
 import pytest
 
 from trans_epub.engines import ENGINES
-from trans_epub.engines.base import extract_translations
+from trans_epub.engines.base import (
+    EngineConfig,
+    extract_translations,
+    translate_texts,
+)
 
 
-def test_engines_registered():
-    """Test that all expected engines are registered."""
-    expected_engines = {"azure", "alibaba", "gemini", "deepseek", "google", "deepl"}
-    registered_engines = set(ENGINES.keys())
+class TestEnginesRegistered:
+    def test_all_expected_engines_present(self):
+        expected = {"azure", "alibaba", "gemini", "deepseek", "google", "deepl"}
+        assert expected.issubset(ENGINES.keys())
 
-    assert expected_engines.issubset(registered_engines), (
-        f"Missing engines: {expected_engines - registered_engines}"
-    )
-
-
-def test_engine_config_structure():
-    """Test that engine configs have expected structure."""
-    for name, config in ENGINES.items():
-        assert hasattr(config, "name")
-        assert hasattr(config, "translate")
-        assert hasattr(config, "char_limit")
-        assert hasattr(config, "elem_limit")
-        assert hasattr(config, "delay")
-
-        # Check that properties have expected types
-        assert isinstance(config.name, str)
-        assert callable(config.translate)
-        assert isinstance(config.char_limit, int)
-        assert isinstance(config.elem_limit, int)
-        assert isinstance(config.delay, (int, float))
+    def test_each_config_has_required_fields(self):
+        for name, config in ENGINES.items():
+            assert isinstance(config.name, str)
+            assert callable(config.translate)
+            assert isinstance(config.char_limit, int)
+            assert isinstance(config.elem_limit, int)
+            assert isinstance(config.delay, (int, float))
 
 
-def test_extract_translations_basic():
-    """Test basic JSON translation extraction."""
-    json_str = '{"translations": ["Xin chào", "Thế giới"]}'
-    result = extract_translations(json_str)
-    assert result == ["Xin chào", "Thế giới"]
+class TestTranslateTexts:
+    """translate_texts dispatcher passes creativity to LLM engines only."""
+
+    def test_passes_creativity_to_llm_engine(self):
+        seen = {}
+
+        def fake(texts, **kwargs):
+            seen.update(kwargs)
+            return texts
+
+        cfg = EngineConfig(
+            name="gemini", translate=fake, char_limit=100, elem_limit=10, delay=0
+        )
+        with patch.dict(ENGINES, {"gemini": cfg}):
+            translate_texts("gemini", ["hello"], creativity=0.5)
+
+        assert seen.get("creativity") == 0.5
+
+    def test_does_not_pass_creativity_to_http_engine(self):
+        seen = {}
+
+        def fake(texts, **kwargs):
+            seen.update(kwargs)
+            return texts
+
+        cfg = EngineConfig(
+            name="azure", translate=fake, char_limit=100, elem_limit=10, delay=0
+        )
+        with patch.dict(ENGINES, {"azure": cfg}):
+            translate_texts("azure", ["hello"], creativity=0.5)
+
+        assert "creativity" not in seen
+
+    def test_raises_on_missing_engine(self):
+        with pytest.raises(KeyError):
+            translate_texts("nonexistent", ["hello"])
 
 
-def test_extract_translations_with_prefix_suffix():
-    """Test extraction with markdown prefix/suffix."""
-    json_str = '```json\n{"translations": ["Xin chào", "Thế giới"]}\n```'
-    result = extract_translations(json_str)
-    assert result == ["Xin chào", "Thế giới"]
+class TestExtractTranslations:
+    def test_basic(self):
+        assert extract_translations(
+            '{"translations": ["Xin chào", "Thế giới"]}'
+        ) == ["Xin chào", "Thế giới"]
 
+    def test_with_markdown_fence(self):
+        result = extract_translations(
+            '```json\n{"translations": ["Xin chào"]}\n```'
+        )
+        assert result == ["Xin chào"]
 
-def test_extract_translations_list_format():
-    """Test extraction from list format."""
-    json_str = '["Xin chào", "Thế giới"]'
-    result = extract_translations(json_str)
-    assert result == ["Xin chào", "Thế giới"]
+    def test_list_format(self):
+        assert extract_translations('["A", "B"]') == ["A", "B"]
 
+    def test_nested_format(self):
+        result = extract_translations(
+            '{"result": {"translations": ["A", "B"]}}'
+        )
+        assert result == ["A", "B"]
 
-def test_extract_translations_nested_format():
-    """Test extraction from nested JSON with translations key."""
-    json_str = '{"result": {"translations": ["Xin chào", "Thế giới"]}}'
-    result = extract_translations(json_str)
-    assert result == ["Xin chào", "Thế giới"]
+    def test_invalid_raises(self):
+        with pytest.raises(ValueError):
+            extract_translations('{"invalid": "format"}')
 
-
-def test_extract_translations_invalid_format():
-    """Test that invalid JSON format raises ValueError."""
-    with pytest.raises(ValueError):
-        extract_translations('{"invalid": "format"}')
-
-
-def test_extract_translations_fixes_control_chars():
-    """Test that control characters are properly escaped."""
-    # This simulates a response with unescaped control characters
-    json_str = '{"translations": ["Hello\\nWorld", "Test\\tTab"]}'
-    result = extract_translations(json_str)
-    # Should handle the escaped characters properly
-    assert len(result) == 2
+    def test_repairs_control_chars(self):
+        result = extract_translations(
+            '{"translations": ["Hello\\nWorld", "Test\\tTab"]}'
+        )
+        assert len(result) == 2
