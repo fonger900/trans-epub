@@ -31,16 +31,17 @@ The `ENGINES` dict (defined in `base.py`) is the single registry. Adding a new e
 | Field | Purpose |
 |---|---|
 | `name` | Engine identifier string |
-| `translate` | Callable `(texts: list[str], creativity: float | None = None) -> list[str]` |
+| `translate` | Callable `(texts: list[str], creativity: float \| None = None, glossary: Glossary \| None = None) -> list[str]` |
 | `char_limit` | Max characters per API batch |
 | `elem_limit` | Max elements per API batch |
-| `delay` | Seconds to sleep between batches (rate limiting) |
+| `delay` | Seconds to sleep between batches (legacy, prefer `limiter`) |
+| `limiter` | `RateLimiter` instance — proactive RPM throttling (default: 10 RPM) |
 
 ### Choosing Limits
 
 - `char_limit` should be 50-80% of the model's context window (in characters, not tokens) to leave room for the system prompt and response.
 - `elem_limit` caps the number of separate paragraphs sent in one request. With greedy batching, `elem_limit` is hit before `char_limit` for very short paragraphs.
-- `delay` is used for engines with strict per-second rate limits. Prefer `call_with_retry`'s 429 handling where possible.
+- `limiter` controls proactive RPM throttling. Set higher for paid tiers, lower for free tiers. Override: `EngineConfig(..., limiter=RateLimiter(rpm=15))`. Default 10 RPM is safe for most free tiers.
 
 ## Engine Types
 
@@ -53,13 +54,13 @@ request:  LLM_PROMPT + json.dumps({"texts": [...texts...]})
 response: {"translations": ["...", "...", ...]}
 ```
 
-All three use `call_with_retry` from `base.py` for automatic retry with exponential backoff.
+All three use `call_with_retry` from `base.py` for automatic retry with exponential backoff and proactive rate limiting.
 
 ### HTTP Translation API (Azure, Google Cloud Translation, DeepL)
 
 Send texts as POST body fields. Response structure varies by provider.
 
-- **Azure**: uses own inline retry (8 attempts) and a dedicated `RateLimiter` for free-tier throttling
+- **Azure**: uses own inline retry (8 attempts) + shared `call_with_retry` limiter
 - **Google Cloud Translation**: **no retry**
 - **DeepL**: **no retry**
 
@@ -70,10 +71,10 @@ Send texts as POST body fields. Response structure varies by provider.
 ```python
 """My custom translation engine."""
 import os
-from .base import ENGINES, EngineConfig, http_session
+from .base import ENGINES, EngineConfig, RateLimiter, http_session
 
 def my_translate(texts: list[str], **_kwargs) -> list[str]:
-    key = os.environ.get("MY_ENGINE_KEY")  # or get_api_key("my_engine")
+    key = os.environ.get("MY_ENGINE_KEY")
     if not key:
         raise RuntimeError("MY_ENGINE_KEY not found")
 
@@ -92,6 +93,7 @@ ENGINES["my_engine"] = EngineConfig(
     char_limit=10_000,
     elem_limit=50,
     delay=0,
+    limiter=RateLimiter(rpm=30),  # adjust based on API tier
 )
 ```
 
@@ -99,7 +101,7 @@ Then add `from .my_engine import my_translate` to `engines/__init__.py`.
 
 ### Adding Retry
 
-For LLM-style engines, wrap the translate function with `call_with_retry`:
+For LLM-style engines, wrap the translate function with `call_with_retry` and pass the engine's limiter:
 
 ```python
 from .base import call_with_retry, extract_translations
@@ -113,7 +115,7 @@ def my_translate(texts, creativity=None):
     def parse(resp):
         return extract_translations(resp.json()["data"])
 
-    return call_with_retry("MyEngine", do_request, parse)
+    return call_with_retry("MyEngine", do_request, parse, limiter=ENGINES["my_engine"].limiter)
 ```
 
 For HTTP API engines, either:
@@ -132,13 +134,13 @@ Only LLM-based engines use creativity. HTTP API engines ignore it (use `**_kwarg
 
 ## API Key Resolution
 
-Each engine reads its key from an environment variable first, then falls back to `get_api_key()` which reads from `_ENGINE_KEY_ENV`:
+Each engine reads its key from an environment variable:
 
 ```python
-key = os.environ.get("MY_ENGINE_KEY") or get_api_key("my_engine")
+key = os.environ.get("MY_ENGINE_KEY")
 ```
 
-The `get_api_key()` function in `config.py` maps engine name → environment variable name. Add your engine to `_ENGINE_KEY_ENV` if you want config file key support.
+API keys come from environment variables only (set in `.env`).
 
 ## Testing a New Engine
 

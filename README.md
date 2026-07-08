@@ -10,10 +10,11 @@ Translate EPUB books from English to Vietnamese using AI translation engines.
 ## Features
 
 - Multi-engine AI translation (6 engines)
-- Fast parallel processing with progress tracking
-- Smart caching and resume capability — survive interruptions
+- Parallel processing with progress bars and char/token tracking
+- Smart caching — resume interrupted runs, skip already-translated chapters
+- Pronoun matrix / glossary injection for consistent character voices
+- Proactive rate limiting — stays under API RPM limits, avoids 429 errors
 - Configurable batching, threading, and creativity/temperature
-- Workspace deployment support (Alibaba)
 
 ## Prerequisites
 
@@ -53,6 +54,12 @@ uv run trans-epub book.epub -t 8
 
 # Creativity/temperature for LLM engines
 uv run trans-epub book.epub --creativity 0.5
+
+# Glossary for consistent character pronouns and terminology
+uv run trans-epub book.epub -g glossary.toml
+
+# Fresh translation (ignore cache)
+uv run trans-epub book.epub --fresh
 ```
 
 ## Configuration
@@ -84,6 +91,38 @@ Config values are overridden by `TRANS_EPUB_*` environment variables.
 
 See [.trans-epub/config.example.toml](.trans-epub/config.example.toml) for all options.
 
+### Glossary (pronoun matrix + terminology)
+
+Ensure consistent character voices with a glossary:
+
+```bash
+# Auto-detected from .trans-epub/glossary.toml or ~/.config/trans-epub/glossary.toml
+uv run trans-epub book.epub
+
+# Explicit path
+uv run trans-epub book.epub -g my-glossary.toml
+```
+
+Glossary format (`.toml`):
+
+```toml
+[characters.John]
+self = "tôi"       # how character refers to themselves
+form = "anh"       # how narrator addresses them
+narrator = "anh ấy" # how narrator refers to them
+note = "ông chủ, ~40 tuổi"
+
+[characters.Mary]
+self = "em"
+form = "cô ấy"
+
+[terms]
+"machine learning" = "học máy"
+"the King" = "Nhà vua"
+```
+
+See [.trans-epub/glossary.example.toml](.trans-epub/glossary.example.toml) for all options.
+
 ## Cost Optimization
 
 | Engine | Approx. Cost | Notes |
@@ -97,9 +136,11 @@ See [.trans-epub/config.example.toml](.trans-epub/config.example.toml) for all o
 
 ## Resume Capability
 
-Each translated chapter is cached in `{output}.cache.json`. If interrupted, re-run the same command to resume where you left off.
+Each translated chapter is cached in `{output}.cache.json`. The cache persists across runs:
 
-Cache is automatically deleted when a full translation completes successfully.
+- **Normal run**: Uses cache to skip already-translated chapters — re-run the same command to resume from where you left off.
+- **Fresh run**: `--fresh` ignores the cache and translates everything from scratch.
+- Cache is never automatically deleted — delete `output.epub.cache.json` manually if needed.
 
 ## Developer Documentation
 

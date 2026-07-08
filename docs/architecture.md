@@ -65,34 +65,45 @@ epub_translator.translate_epub()
 - Loads config via `load_config()`
 - Parses `--items` ranges (e.g. `1-5,8`)
 - Resolves `auto` engine by checking env vars in a fixed priority order
+- `--glossary` / `-g` flag for character pronoun matrix
+- `--fresh` flag to ignore cache and translate everything
 - Calls `translate_epub()` with parsed args
 - Returns exit code 0
 
 ### `config.py` (142 lines)
 
-Two dataclasses: `GlobalConfig` (engine, threads, creativity, per-engine overrides) and `EngineConfig` (api_key, base_url, model, creativity).
+Two dataclasses: `GlobalConfig` (engine, threads, creativity) and glossary-related structures (`CharacterConfig`, `Glossary`).
 
-Load priority (highest first):
+Config load priority (highest first):
 1. `TRANS_EPUB_*` environment variables
 2. Explicit `--config` path
 3. `./.trans-epub/config.toml`
 4. `~/.config/trans-epub/config.toml`
 5. Built-in defaults
 
-API keys are sourced from environment variables only (`get_api_key()` reads `_ENGINE_KEY_ENV` mapping). Config file `api_key` fields exist in the schema but are **not wired** into `load_config`'s return — engines read keys directly from env vars.
+Glossary auto-detection:
+1. Explicit `--glossary` path
+2. `./.trans-epub/glossary.toml`
+3. `~/.config/trans-epub/glossary.toml`
+
+`build_glossary_prompt()` generates pronoun matrix instructions injected into LLM system prompts for consistent character voices.
 
 ### `epub_translator.py` (276 lines)
 
 - Reads EPUB with `ebooklib.read_epub()`
 - Adds `EpubNav` if missing (ebooklib writer bug workaround)
 - Maps spine IDs → items via `get_spine_items()`
+- **Pre-scan**: counts total/cached/pending chars before translation, displays summary
+- **Interactive prompt**: asks y/n before proceeding (skipped when piped/redirected)
 - Translatable items processed via `ThreadPoolExecutor` (configurable `--threads`)
 - Each thread runs `process_chapter()`:
-  - Checks cache → restores or translates
+  - Checks cache (skipped if `--fresh`) → restores or translates
   - Uses per-worker `Rich` progress rows that appear/disappear via a free-list
   - Writes per-chapter cache to `.cache.json` after each chapter
-- On completion: writes EPUB, repacks ZIP, optionally deletes cache on success
-- Collects failures and reports them at end; partial output is still written
+- On completion: writes EPUB, repacks ZIP, cache persists for future runs
+- `--fresh` flag ignores cache, translates everything from scratch
+- Collects failures and reports them at end with quota troubleshooting tips
+- Partial output is still written on failure
 
 #### Threading Model
 
@@ -106,7 +117,8 @@ API keys are sourced from environment variables only (`get_api_key()` reads `_EN
 
 - Cache file: `{output}.cache.json` — JSON dict mapping item name → translated HTML
 - Written after each chapter completes (crash-safe resume)
-- Deleted on successful full translation
+- **Persists** across runs — subsequent runs skip already-cached chapters
+- `--fresh` flag bypasses cache, translates everything
 - `__toc__` key for TOC titles
 - Nav document cached under its item name
 
@@ -147,15 +159,15 @@ Core HTML processing logic:
 
 ### `engines/base.py` (202 lines)
 
-**`EngineConfig`**: Dataclass holding name, translate callable, char_limit, elem_limit, delay.
+**`EngineConfig`**: Dataclass holding name, translate callable, char_limit, elem_limit, delay, and optional `RateLimiter`.
 
 **`ENGINES`**: Global `dict[str, EngineConfig]` — populated by each engine module at import time via side-effect registration.
 
 **`http_session`**: Connection-pooled `requests.Session` (pool_maxsize=20).
 
-**`RateLimiter`**: Thread-safe token-less interval limiter (used only by Azure).
+**`RateLimiter`**: Thread-safe token-bucket limiter — prevents hitting API RPM limits proactively. Default 10 RPM for LLM engines (Gemini: 15 RPM).
 
-**`LLM_PROMPT`**: Shared system prompt for LLM-based engines (Gemini, DeepSeek, Alibaba). Instructs the model to translate EN→VI naturally, preserve emphasis tags, and return JSON.
+**`LLM_PROMPT`**: Shared system prompt for LLM-based engines (Gemini, DeepSeek, Alibaba). Instructs the model to translate EN→VI naturally, preserve emphasis tags, and return JSON. Supports glossary injection via `build_prompt(glossary)`.
 
 **`extract_translations(raw_json)`**: Parses LLM JSON output with repair layers:
 1. Strip markdown code fences
@@ -164,28 +176,27 @@ Core HTML processing logic:
 4. `ast.literal_eval()` fallback
 5. Accept list, or dict with `translations` key, or first list value found
 
-**`call_with_retry(engine_name, request_fn, parse_fn, max_attempts=7)`**: Generic HTTP retry loop:
-- Retries on: `RequestException` (network), 429 (rate limit), JSONDecodeError, ValueError
-- Does **not** retry on: 4xx (except 429)
+**`call_with_retry(engine_name, request_fn, parse_fn, max_attempts=7, limiter=None)`**: Generic HTTP retry loop:
+- **Proactive**: calls `limiter.wait()` before each request to stay under RPM limits
+- Retries on: `RequestException` (network), 429/403 (rate limit / quota), JSONDecodeError, ValueError
+- Does **not** retry on: 4xx (except 429/403)
 - Exponential backoff: `min(3 * 2^attempt, 60)` seconds
-- 429 uses `Retry-After` header when available
+- 429/403 uses `Retry-After` header when available
+- Detects quota exceeded keywords in response body (quota, billing, payment required)
 - Re-raises on final attempt exhaustion
 
 ### Engine Modules (6 files, 48–97 lines each)
 
 Each follows the same pattern:
-1. Define a `{name}_translate(texts, creativity=None)` function
-2. Read API key from env var or config
-3. Build request payload
-4. Wrap in `call_with_retry` for retry with exponential backoff
+1. Define a `{name}_translate(texts, creativity=None, glossary=None)` function
+2. Read API key from env var
+3. Build request payload with glossary-injected prompt (`build_prompt(glossary)` for LLM engines)
+4. Wrap in `call_with_retry` with proactive rate limiting
 5. Register with `ENGINES[name] = EngineConfig(...)`
 
-All six engines (gemini, deepseek, alibaba, google, deepl, azure) use the shared `call_with_retry` from `base.py`. Azure additionally uses a dedicated `RateLimiter` (6s interval, defined in `azure.py`) for free-tier throttling.
+All six engines (gemini, deepseek, alibaba, google, deepl, azure) use the shared `call_with_retry` from `base.py` for retry + proactive rate limiting. LLM engines pass `ENGINES[name].limiter` to enforce per-engine RPM limits.
 
 ## Known Issues
-
-### `cached_chars` lock naming
-Updated under `total_chars_lock` in `epub_translator.py:163-164`. Works correctly but shares a lock named for a different variable.
 
 ### Attributes not translated
 HTML attributes like `alt`, `title`, `placeholder` are silently skipped. Only visible text content is translated.
