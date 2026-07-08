@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from .base import (
     ENGINES,
     EngineConfig,
+    RateLimiter,
     build_prompt,
     call_with_retry,
     extract_translations,
@@ -73,7 +74,9 @@ def gemini_translate(
         raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         return extract_translations(raw)
 
-    return call_with_retry("Gemini", do_request, parse)
+    return call_with_retry(
+        "Gemini", do_request, parse, limiter=ENGINES["gemini"].limiter
+    )
 
 
 ENGINES["gemini"] = EngineConfig(
@@ -82,4 +85,5 @@ ENGINES["gemini"] = EngineConfig(
     char_limit=20_000,
     elem_limit=50,
     delay=0,
+    limiter=RateLimiter(rpm=15),  # Gemini free tier: 15 RPM
 )

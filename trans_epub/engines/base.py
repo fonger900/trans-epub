@@ -13,8 +13,9 @@ from __future__ import annotations
 import ast
 import json
 import re
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 import requests
@@ -30,6 +31,30 @@ _adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20)
 http_session.mount("https://", _adapter)
 http_session.mount("http://", _adapter)
 
+# ── Rate limiter ───────────────────────────────────────────────────────────────
+
+
+class RateLimiter:
+    """Thread-safe token-bucket limiter — prevents hitting API rate limits.
+
+    Each engine shares one instance. Before every API call, ``wait()``
+    sleeps until a request slot is available.
+    """
+
+    def __init__(self, rpm: int) -> None:
+        self._interval = 60.0 / rpm  # seconds between requests
+        self._lock = threading.Lock()
+        self._next = 0.0  # earliest time next request is allowed
+
+    def wait(self) -> None:
+        """Block until a request slot is available."""
+        with self._lock:
+            now = time.monotonic()
+            if now < self._next:
+                time.sleep(self._next - now)
+            self._next = max(now, self._next) + self._interval
+
+
 # ── Engine config ──────────────────────────────────────────────────────────────
 
 
@@ -42,6 +67,13 @@ class EngineConfig:
     char_limit: int
     elem_limit: int
     delay: float
+    limiter: RateLimiter | None = None
+
+    def __post_init__(self) -> None:
+        if self.limiter is None and self.delay <= 0:
+            # Default 10 RPM — safe for free tiers
+            # Gemini free: 15 RPM, DeepSeek free: ~10 RPM
+            self.limiter = RateLimiter(rpm=10)
 
 
 ENGINES: dict[str, EngineConfig] = {}
@@ -118,8 +150,9 @@ def call_with_retry(
     request_fn: Callable[[], requests.Response],
     parse_fn: Callable[[requests.Response], list[str]],
     max_attempts: int = 7,
+    limiter: RateLimiter | None = None,
 ) -> list[str]:
-    """Execute an HTTP call with retry logic for network errors, 429s, and parse failures.
+    """Execute an HTTP call with retry logic + proactive rate limiting.
 
     Args:
         engine_name: Label for error messages (e.g. "Alibaba").
@@ -127,9 +160,16 @@ def call_with_retry(
         parse_fn: Callable that extracts translations from a successful Response.
                   May raise ValueError or json.JSONDecodeError to trigger a retry.
         max_attempts: Maximum number of attempts before giving up.
+        limiter: Optional RateLimiter — if given, ``wait()`` is called before
+                 each request to stay under RPM limits.
     """
     for attempt in range(max_attempts):
         label = f"attempt {attempt + 1}/{max_attempts}"
+
+        # Proactive: wait for rate limit slot before making request
+        if limiter:
+            limiter.wait()
+
         try:
             resp = request_fn()
         except requests.exceptions.RequestException as e:
@@ -146,7 +186,8 @@ def call_with_retry(
 
         if resp.status_code == 429 or resp.status_code == 403:
             # Check for quota exceeded in response body
-            resp_text = resp.text.lower()
+            resp_text = resp.text if isinstance(resp.text, str) else ""
+            resp_text = resp_text.lower()
             quota_keywords = [
                 "quota",
                 "limit exceeded",

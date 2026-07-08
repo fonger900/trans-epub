@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import sys
 import threading
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -154,28 +155,23 @@ def translate_epub(
         f"[bold]Pending:[/bold] {pending_chars:,} chars"
     )
 
-    # ── Prompt y/n to proceed ──────────────────────────────────────────────────
-    if not fresh:
-        console.print(
-            f"\n[bold yellow]Use cache for {cached_chars:,} chars?[/bold yellow]"
-        )
+    # ── Prompt y/n to proceed (only in interactive mode) ──────────────────────
+    if sys.stdin.isatty():
+        if not fresh:
+            console.print(
+                f"\n[bold yellow]Use cache for {cached_chars:,} chars?[/bold yellow]"
+            )
 
-    try:
-        choice = input("\nProceed? [Y/n] ").strip().lower()
-        if choice and choice != "y" and choice != "yes":
+        try:
+            choice = input("\nProceed? [Y/n] ").strip().lower()
+            if choice and choice != "y" and choice != "yes":
+                console.print("[yellow]Aborted[/yellow]")
+                return
+        except EOFError:
             console.print("[yellow]Aborted[/yellow]")
             return
-    except EOFError:
-        console.print("[yellow]Aborted[/yellow]")
-        return
 
-    # Items that will actually be translated (not skipped)
-    work_items = [
-        (i, item)
-        for i, item in enumerate(items, 1)
-        if not only_chapters or i in only_chapters
-    ]
-
+    # Reset runtime counters (pre-scan values were for display only)
     total_chars = 0
     cached_chars = 0
     total_chars_lock = threading.Lock()

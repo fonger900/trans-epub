@@ -90,7 +90,9 @@ def alibaba_translate(
         raw = resp.json()["choices"][0]["message"]["content"]
         return extract_translations(raw)
 
-    return call_with_retry("Alibaba", do_request, parse)
+    return call_with_retry(
+        "Alibaba", do_request, parse, limiter=ENGINES["alibaba"].limiter
+    )
 
 
 # Default configuration with conservative limits

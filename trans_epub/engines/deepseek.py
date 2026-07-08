@@ -55,7 +55,9 @@ def deepseek_translate(
         raw = resp.json()["choices"][0]["message"]["content"]
         return extract_translations(raw)
 
-    return call_with_retry("DeepSeek", do_request, parse)
+    return call_with_retry(
+        "DeepSeek", do_request, parse, limiter=ENGINES["deepseek"].limiter
+    )
 
 
 ENGINES["deepseek"] = EngineConfig(
