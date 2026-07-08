@@ -125,11 +125,49 @@ def translate_epub(
             console.print(f"{i:<5} {item.get_name()}")
         return
 
+    # ── Count translatable chars before translation ────────────────────────────
+    work_items = [
+        (i, item)
+        for i, item in enumerate(items, 1)
+        if not only_chapters or i in only_chapters
+    ]
+    total_chars = 0
+    cached_chars = 0
+    pending_chars = 0
+    for i, item in work_items:
+        name = item.get_name()
+        chars = count_translatable_chars(item.get_content())
+        total_chars += chars
+        if name in cache and not fresh:
+            cached_chars += chars
+        else:
+            pending_chars += chars
+
     console.print(
         f"[bold]Book:[/bold] {total} items  "
         f"[bold]Engine:[/bold] {engine}  "
         f"[bold]Threads:[/bold] {threads}"
     )
+    console.print(
+        f"[bold]Total:[/bold] {total_chars:,} chars  "
+        f"[bold]Cached:[/bold] {cached_chars:,} chars  "
+        f"[bold]Pending:[/bold] {pending_chars:,} chars"
+    )
+
+    # ── Prompt y/n to proceed ──────────────────────────────────────────────────
+    if not fresh:
+        console.print(
+            f"\n[bold yellow]Use cache for {cached_chars:,} chars?[/bold yellow]"
+        )
+
+    try:
+        choice = input("\nProceed? [Y/n] ").strip().lower()
+        if choice and choice != "y" and choice != "yes":
+            console.print("[yellow]Aborted[/yellow]")
+            return
+    except EOFError:
+        console.print("[yellow]Aborted[/yellow]")
+        return
 
     # Items that will actually be translated (not skipped)
     work_items = [
@@ -300,6 +338,6 @@ def translate_epub(
 
     console.print(
         f"[bold green]✓ Done[/bold green] → {output_path}  "
-        f"([dim]{total_chars:,} chars translated[/dim], "
+        f"([dim]{total_chars:,} chars translated ({total_chars // 4:,} tokens)[/dim], "
         f"[dim]{cached_chars:,} cached[/dim])"
     )
