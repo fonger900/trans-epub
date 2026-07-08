@@ -81,11 +81,15 @@ def translate_epub(
     threads: int = 4,
     creativity: float | None = None,
     glossary_path: str | None = None,
+    fresh: bool = False,
 ) -> None:
-    """Translate *input_path* from English to Vietnamese and write *output_path*."""
+    """Translate *input_path* from English to Vietnamese and write *output_path*.
+
+    If *fresh* is True, ignore existing cache and translate all items.
+    """
     cache_path = Path(output_path + ".cache.json")
     cache: dict[str, str] = (
-        json.loads(cache_path.read_text()) if cache_path.exists() else {}
+        json.loads(cache_path.read_text()) if cache_path.exists() and not fresh else {}
     )
 
     # Load glossary if provided or auto-detect
