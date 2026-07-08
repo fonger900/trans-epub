@@ -284,8 +284,8 @@ def translate_epub(
     # Always write — preserve whatever was translated even on partial failure
     epub.write_epub(output_path, book)
     _repack_epub(output_path)
-    if not only_chapters and not failed:
-        cache_path.unlink(missing_ok=True)
+    # Cache persist across runs for incremental builds and resume support
+    # Delete only explicitly or if caller chooses
 
     if failed:
         console.print(
