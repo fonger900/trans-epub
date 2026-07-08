@@ -4,6 +4,8 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  release:
+    types: [published]
 
 jobs:
   test:
@@ -23,7 +25,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --group dev
 
       - name: Check entry point works
         run: uv run trans-epub --version
@@ -44,10 +46,32 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --group dev
 
       - name: Ruff check
         run: uv run ruff check trans_epub/
 
       - name: Ruff format check
         run: uv run ruff format --check trans_epub/
+
+  release:
+    name: Release to PyPI
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, lint]
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish
