@@ -21,7 +21,7 @@ from .base import (
 )
 
 if TYPE_CHECKING:
-    from ..glossary import Glossary
+    from ..config import Glossary
 
 _DEFAULT_MODEL = "gemini-2.5-flash"
 

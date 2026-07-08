@@ -16,7 +16,7 @@ from .base import (
 )
 
 if TYPE_CHECKING:
-    from ..glossary import Glossary
+    from ..config import Glossary
 
 DEFAULT_DEEPSEEK_CREATIVITY = 0.4
 

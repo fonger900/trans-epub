@@ -32,7 +32,7 @@ from .base import (
 )
 
 if TYPE_CHECKING:
-    from ..glossary import Glossary
+    from ..config import Glossary
 
 DEFAULT_ALIBABA_CREATIVITY = 0.4
 _DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
