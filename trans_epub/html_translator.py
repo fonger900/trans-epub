@@ -1,5 +1,7 @@
 """HTML translation logic."""
 
+from __future__ import annotations
+
 import html as html_lib
 import re
 import time
@@ -9,6 +11,7 @@ from bs4 import BeautifulSoup, Tag
 from bs4.element import NavigableString
 
 from .engines import EMPHASIS_TAGS, ENGINES
+from .glossary import Glossary
 
 # Tags whose text content should be translated
 TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}
@@ -98,6 +101,7 @@ def translate_html(
     engine: str,
     creativity: float | None = None,
     progress_cb: ProgressCallback | None = None,
+    glossary: Glossary | None = None,
 ) -> tuple[bytes, int]:
     """Translate all translatable text nodes in *html_bytes*.
 
@@ -138,7 +142,9 @@ def translate_html(
     # ── Translate each batch ──────────────────────────────────────────────────
     def translate_batch(batch_texts: list[str]) -> list[str]:
         try:
-            result = cfg.translate(batch_texts, creativity=creativity)
+            result = cfg.translate(
+                batch_texts, creativity=creativity, glossary=glossary
+            )
             if len(result) == len(batch_texts):
                 return result
             # Mismatched count — split and retry

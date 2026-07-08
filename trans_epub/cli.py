@@ -95,6 +95,12 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Path to configuration file (default: search in standard locations)",
     )
+    parser.add_argument(
+        "--glossary",
+        "-g",
+        type=Path,
+        help="Path to glossary TOML file for character pronouns and terms (auto-detects .trans-epub/glossary.toml)",
+    )
     args = parser.parse_args(argv)
 
     out = args.output or args.input.replace(".epub", "_vi.epub")
@@ -118,5 +124,6 @@ def main(argv: list[str] | None = None) -> int:
         list_only=args.list,
         threads=args.threads,
         creativity=args.creativity,
+        glossary_path=str(args.glossary) if args.glossary else None,
     )
     return 0

@@ -1,11 +1,14 @@
 """Table-of-contents and nav-document translation."""
 
+from __future__ import annotations
+
 import json
 
 from bs4 import BeautifulSoup
 from ebooklib import epub
 
 from .engines import ENGINES
+from .glossary import Glossary
 from .html_translator import translate_html
 
 _TOC_KEY = "__toc__"
@@ -16,6 +19,7 @@ def translate_toc_and_nav(
     engine: str,
     cache: dict[str, str],
     creativity: float | None = None,
+    glossary: Glossary | None = None,
 ) -> None:
     """Translate TOC link titles and the EPUB nav document in-place.
 
@@ -47,7 +51,9 @@ def translate_toc_and_nav(
                 pass
 
         if titles:  # Not cached — translate via API
-            translated_titles = ENGINES[engine].translate(titles, creativity=creativity)
+            translated_titles = ENGINES[engine].translate(
+                titles, creativity=creativity, glossary=glossary
+            )
             cache[_TOC_KEY] = json.dumps(translated_titles, ensure_ascii=False)
             for link, translated in zip(links, translated_titles):
                 link.title = translated
@@ -67,7 +73,7 @@ def translate_toc_and_nav(
             if text:
                 anchor.string = text
         translated_html, _ = translate_html(
-            soup.encode("utf-8"), engine, creativity=creativity
+            soup.encode("utf-8"), engine, creativity=creativity, glossary=glossary
         )
         cache[nav_name] = translated_html.decode("utf-8")
         item.set_content(translated_html)

@@ -21,6 +21,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
+from .glossary import Glossary, find_glossary, load_glossary
 from .html_translator import count_translatable_chars, translate_html
 from .toc import translate_toc_and_nav
 
@@ -79,12 +80,30 @@ def translate_epub(
     list_only: bool = False,
     threads: int = 4,
     creativity: float | None = None,
+    glossary_path: str | None = None,
 ) -> None:
     """Translate *input_path* from English to Vietnamese and write *output_path*."""
     cache_path = Path(output_path + ".cache.json")
     cache: dict[str, str] = (
         json.loads(cache_path.read_text()) if cache_path.exists() else {}
     )
+
+    # Load glossary if provided or auto-detect
+    glossary: Glossary | None = None
+    glossary_file: Path | None = None
+    if glossary_path:
+        glossary_file = Path(glossary_path)
+        if not glossary_file.exists():
+            console.print(f"[red]Glossary not found:[/red] {glossary_path}")
+            return
+    else:
+        glossary_file = find_glossary()
+    if glossary_file:
+        glossary = load_glossary(glossary_file)
+        console.print(
+            f"[dim]Glossary:[/dim] {glossary_file}  "
+            f"({len(glossary.characters)} characters, {len(glossary.terms)} terms)"
+        )
 
     book = epub.read_epub(input_path)
 
@@ -195,7 +214,11 @@ def translate_epub(
         original = item.get_content()
         try:
             translated, chars = translate_html(
-                original, engine, creativity=creativity, progress_cb=on_progress
+                original,
+                engine,
+                creativity=creativity,
+                progress_cb=on_progress,
+                glossary=glossary,
             )
         except Exception as e:
             progress.update(worker_tasks[wid], visible=False)
@@ -227,7 +250,9 @@ def translate_epub(
     failed: list[tuple[str, str]] = []
 
     with progress:
-        translate_toc_and_nav(book, engine, cache, creativity=creativity)
+        translate_toc_and_nav(
+            book, engine, cache, creativity=creativity, glossary=glossary
+        )
         cache_path.write_text(json.dumps(cache, ensure_ascii=False))
         progress.update(toc_task, advance=1, visible=False)
 

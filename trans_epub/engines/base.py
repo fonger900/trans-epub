@@ -8,15 +8,20 @@ Shared infrastructure for all translation engines:
 - ENGINES registry  (populated by each engine module)
 """
 
+from __future__ import annotations
+
 import ast
 import json
 import re
 import time
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import requests
 from requests.adapters import HTTPAdapter
+
+if TYPE_CHECKING:
+    from ..glossary import Glossary
 
 # ── Shared HTTP session ────────────────────────────────────────────────────────
 
@@ -168,11 +173,24 @@ def call_with_retry(
     raise RuntimeError(f"{engine_name} translation failed: all retries exhausted")
 
 
+def build_prompt(glossary: Glossary | None = None) -> str:
+    """Build full system prompt, optionally including glossary."""
+    from ..glossary import build_glossary_prompt
+
+    prompt = LLM_PROMPT
+    if glossary:
+        prompt += build_glossary_prompt(glossary)
+    return prompt
+
+
 def translate_texts(
-    engine: str, texts: list[str], creativity: float | None = None
+    engine: str,
+    texts: list[str],
+    creativity: float | None = None,
+    glossary: Glossary | None = None,
 ) -> list[str]:
     """Dispatch translation to the appropriate engine function."""
     cfg = ENGINES[engine]
     if engine in ("gemini", "deepseek", "alibaba"):
-        return cfg.translate(texts, creativity=creativity)
+        return cfg.translate(texts, creativity=creativity, glossary=glossary)
     return cfg.translate(texts)

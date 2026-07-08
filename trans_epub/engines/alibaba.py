@@ -16,17 +16,23 @@ For custom workspaces, set DASHSCOPE_WORKSPACE_ID to your workspace ID.
 If both DASHSCOPE_WORKSPACE_ID and DASHSCOPE_API_BASE are set, DASHSCOPE_API_BASE takes precedence.
 """
 
+from __future__ import annotations
+
 import json
 import os
+from typing import TYPE_CHECKING
 
 from .base import (
     ENGINES,
-    LLM_PROMPT,
     EngineConfig,
+    build_prompt,
     call_with_retry,
     extract_translations,
     http_session,
 )
+
+if TYPE_CHECKING:
+    from ..glossary import Glossary
 
 DEFAULT_ALIBABA_CREATIVITY = 0.4
 _DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -34,7 +40,11 @@ _DEFAULT_MODEL = "qwen-mt-plus"
 _DEFAULT_MAX_TOKENS = 8192
 
 
-def alibaba_translate(texts: list[str], creativity: float | None = None) -> list[str]:
+def alibaba_translate(
+    texts: list[str],
+    creativity: float | None = None,
+    glossary: Glossary | None = None,
+) -> list[str]:
     # Import here to avoid circular imports
     from ..config import get_api_key
 
@@ -61,7 +71,7 @@ def alibaba_translate(texts: list[str], creativity: float | None = None) -> list
     max_tokens = int(os.environ.get("DASHSCOPE_MAX_TOKENS", _DEFAULT_MAX_TOKENS))
     temperature = DEFAULT_ALIBABA_CREATIVITY if creativity is None else creativity
 
-    prompt = LLM_PROMPT + json.dumps({"texts": texts}, ensure_ascii=False)
+    prompt = build_prompt(glossary) + json.dumps({"texts": texts}, ensure_ascii=False)
 
     def do_request():
         return http_session.post(

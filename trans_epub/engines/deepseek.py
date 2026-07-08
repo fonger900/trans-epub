@@ -1,21 +1,31 @@
 """DeepSeek translation engine."""
 
+from __future__ import annotations
+
 import json
 import os
+from typing import TYPE_CHECKING
 
 from .base import (
     ENGINES,
-    LLM_PROMPT,
     EngineConfig,
+    build_prompt,
     call_with_retry,
     extract_translations,
     http_session,
 )
 
+if TYPE_CHECKING:
+    from ..glossary import Glossary
+
 DEFAULT_DEEPSEEK_CREATIVITY = 0.4
 
 
-def deepseek_translate(texts: list[str], creativity: float | None = None) -> list[str]:
+def deepseek_translate(
+    texts: list[str],
+    creativity: float | None = None,
+    glossary: Glossary | None = None,
+) -> list[str]:
     # Import here to avoid circular imports
     from ..config import get_api_key
 
@@ -26,7 +36,7 @@ def deepseek_translate(texts: list[str], creativity: float | None = None) -> lis
 
     temperature = DEFAULT_DEEPSEEK_CREATIVITY if creativity is None else creativity
 
-    prompt = LLM_PROMPT + json.dumps({"texts": texts}, ensure_ascii=False)
+    prompt = build_prompt(glossary) + json.dumps({"texts": texts}, ensure_ascii=False)
 
     def do_request():
         return http_session.post(

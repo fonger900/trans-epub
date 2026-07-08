@@ -1,0 +1,74 @@
+# Translation Glossary for trans-epub
+#
+# This file ensures consistent Vietnamese translations across chapters.
+# Place this file at: .trans-epub/glossary.toml (project-local)
+# Or at: ~/.config/trans-epub/glossary.toml (user-global)
+#
+# Auto-detected on every run, or pass explicitly: --glossary path/to/glossary.toml
+
+# ── Characters ─────────────────────────────────────────────────────────────────
+# Map character names to Vietnamese pronoun usage.
+#
+# Fields:
+#   self     = xưng  (how the character refers to themselves)
+#   form     = hô   (how others address them)
+#   narrator = how the narrator refers to them
+#   note     = brief context (age, role, relationships)
+#
+# Simple form (just address pronoun):
+#   John = "anh"
+#
+# Detailed form:
+#   [characters.John]
+#   self = "tôi"
+#   form = "anh"
+#   narrator = "anh ấy"
+#   note = "ông chủ, ~40 tuổi"
+
+[characters]
+
+# Example: Fiction characters with full pronoun mapping
+# [characters.John]
+# self = "tôi"
+# form = "anh"
+# narrator = "anh ấy"
+# note = "nhân vật chính, nam, ~40 tuổi, ông chủ"
+
+# [characters.Mary]
+# self = "em"
+# form = "chị"
+# narrator = "cô ấy"
+# note = "vợ John, nữ, ~35 tuổi"
+
+# [characters.Tom]
+# self = "em"
+# form = "anh"
+# narrator = "anh ấy"
+# note = "nhân viên John, nam trẻ, ~25 tuổi, gọi sếp là 'anh' hoặc 'sếp'"
+
+# Example: Non-fiction - just lock the name translation
+# [characters."Charles Petzold"]
+# narrator = "ông"
+# note = "tác giả"
+
+
+# ── Terms ──────────────────────────────────────────────────────────────────────
+# Lock specific English terms to consistent Vietnamese translations.
+# Useful for technical terms, coined phrases, or recurring concepts.
+
+[terms]
+
+# Example: Technical terms
+# "artificial intelligence" = "trí tuệ nhân tạo"
+# "machine learning" = "học máy"
+# "neural network" = "mạng nơ-ron"
+# "quantum computing" = "điện toán lượng tử"
+
+# Example: Business/economics terms
+# "supply chain" = "chuỗi cung ứng"
+# "gross domestic product" = "tổng sản phẩm quốc nội"
+# "inflation" = "lạm phát"
+
+# Example: Literary/coined terms (keep consistent across chapters)
+# "the Uncertain World" = "Thế Giới Bất Định"
+# "Black Swan event" = "sự kiện Thiên Nga Đen"

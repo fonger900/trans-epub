@@ -5,17 +5,23 @@ Optionally set GEMINI_MODEL to override the model name.
 Optionally set GEMINI_MAX_TOKENS to override max output tokens.
 """
 
+from __future__ import annotations
+
 import json
 import os
+from typing import TYPE_CHECKING
 
 from .base import (
     ENGINES,
-    LLM_PROMPT,
     EngineConfig,
+    build_prompt,
     call_with_retry,
     extract_translations,
     http_session,
 )
+
+if TYPE_CHECKING:
+    from ..glossary import Glossary
 
 _DEFAULT_MODEL = "gemini-2.5-flash"
 
@@ -32,7 +38,11 @@ _SAFETY_SETTINGS = [
 ]
 
 
-def gemini_translate(texts: list[str], creativity: float | None = None) -> list[str]:
+def gemini_translate(
+    texts: list[str],
+    creativity: float | None = None,
+    glossary: Glossary | None = None,
+) -> list[str]:
     # Import here to avoid circular imports
     from ..config import get_api_key
 
@@ -48,7 +58,7 @@ def gemini_translate(texts: list[str], creativity: float | None = None) -> list[
     if max_tokens := os.environ.get("GEMINI_MAX_TOKENS"):
         generation_config["maxOutputTokens"] = int(max_tokens)
 
-    prompt = LLM_PROMPT + json.dumps({"texts": texts}, ensure_ascii=False)
+    prompt = build_prompt(glossary) + json.dumps({"texts": texts}, ensure_ascii=False)
 
     def do_request():
         return http_session.post(
