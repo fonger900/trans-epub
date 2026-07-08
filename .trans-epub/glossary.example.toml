@@ -5,6 +5,10 @@
 # Or at: ~/.config/trans-epub/glossary.toml (user-global)
 #
 # Auto-detected on every run, or pass explicitly: --glossary path/to/glossary.toml
+#
+# Note: Glossary injection adds to prompt size — consider lowering char_limit
+# or creativity if hitting API rate limits. Use --fresh to ignore cache and
+# re-translate with an updated glossary.
 
 # ── Characters ─────────────────────────────────────────────────────────────────
 # Map character names to Vietnamese pronoun usage.

@@ -1,44 +1,45 @@
 # trans-epub configuration example
-# Copy this file to ~/.config/trans-epub/config.toml or ./config.toml
+# Copy to: ./trans-epub/config.toml (project-local)
+#      or: ~/.config/trans-epub/config.toml (user-global)
+#
+# All values optional — defaults shown below.
+# Override with TRANS_EPUB_* environment variables.
 
 [defaults]
-engine = "azure"              # Default engine (azure, alibaba, gemini, deepseek)
-threads = 4                   # Number of concurrent translation threads
-creativity = 0.3              # Default creativity for LLM engines (0.0-1.0)
-timeout = 300                 # Timeout for API calls in seconds
+engine = "auto"       # Default engine (auto, azure, alibaba, gemini, deepseek, google, deepl)
+threads = 4           # Concurrent translation threads
+creativity = 0.3      # LLM creativity/temperature (0.0-1.0)
 
-[engines.azure]
-api_key = ""                  # Set your Azure Translator key
-region = "global"             # Azure region (global, or specific region)
-char_limit = 40000            # Max chars per batch (up to 50k for Azure)
-elem_limit = 100              # Max elements per batch
 
-[engines.alibaba]
-api_key = ""                  # Set your DashScope API key
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-model = "qwen-max"            # Model name
-creativity = 0.4              # Default creativity (0.0-1.0)
+# ── Authentication ────────────────────────────────────────────────────────────
+# API keys are set via environment variables ONLY (in .env file):
+#
+#   AZURE_TRANSLATOR_KEY    - Azure Cognitive Translator
+#   GEMINI_API_KEY          - Google Gemini
+#   DEEPSEEK_API_KEY        - DeepSeek
+#   DASHSCOPE_API_KEY       - Alibaba DashScope (Qwen)
+#   GOOGLE_TRANSLATE_API_KEY - Google Cloud Translation
+#   DEEPL_API_KEY           - DeepL
+#
+# They are NOT stored in this config file for security reasons.
 
-[engines.gemini]
-api_key = ""                  # Set your Google Gemini API key
-model = "gemini-3.5-flash"    # Model name
-creativity = 0.3              # Default creativity (0.0-1.0)
 
-[engines.deepseek]
-api_key = ""                  # Set your DeepSeek API key
-model = "deepseek-chat"       # Model name
-creativity = 0.4              # Default creativity (0.0-1.0)
+# ── Rate Limiting ──────────────────────────────────────────────────────────────
+# Each engine uses proactive rate limiting to avoid 429 errors:
+#
+#   - Gemini: 15 RPM  (free tier)
+#   - DeepSeek: 10 RPM
+#   - Alibaba: 10 RPM
+#   - Azure/Google/DeepL: per-provider limits
+#
+# The limiter blocks threads before API calls to stay under the limit.
+# No configuration needed — it just works.
 
-[batching]
-char_limit = 10000            # Default max characters per batch
-elem_limit = 25               # Default max elements per batch
-delay = 0.0                   # Delay between API calls (rate limiting)
 
-[caching]
-enabled = true                # Enable/disable caching of translations
-ttl_days = 30                 # Cache expiration in days (0 = never expire)
-location = "./cache"          # Directory for cache files
-
-[ui]
-progress_refresh_rate = 0.1   # Progress bar refresh rate in seconds
-verbose = false               # Enable verbose output
+# ── Glossary ───────────────────────────────────────────────────────────────────
+# Character pronouns and terminology consistency:
+#
+#   Auto-detected: .trans-epub/glossary.toml or ~/.config/trans-epub/glossary.toml
+#   Explicit path:  --glossary path/to/glossary.toml
+#
+# See .trans-epub/glossary.example.toml for format details.
