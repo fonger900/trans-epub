@@ -15,14 +15,9 @@ from .base import (
 
 
 def google_translate(texts: list[str], **_kwargs) -> list[str]:
-    # Import here to avoid circular imports
-    from ..config import get_api_key
-
-    key = os.environ.get("GOOGLE_TRANSLATE_API_KEY") or get_api_key("google")
+    key = os.environ.get("GOOGLE_TRANSLATE_API_KEY")
     if not key:
-        raise RuntimeError(
-            "GOOGLE_TRANSLATE_API_KEY not found in environment or config"
-        )
+        raise RuntimeError("GOOGLE_TRANSLATE_API_KEY not found in environment")
 
     region = os.environ.get("GOOGLE_TRANSLATE_REGION", "global")
     host = (

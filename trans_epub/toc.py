@@ -7,8 +7,8 @@ import json
 from bs4 import BeautifulSoup
 from ebooklib import epub
 
+from .config import Glossary
 from .engines import ENGINES
-from .glossary import Glossary
 from .html_translator import translate_html
 
 _TOC_KEY = "__toc__"

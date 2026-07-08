@@ -21,7 +21,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from .glossary import Glossary, find_glossary, load_glossary
+from .config import Glossary, load_glossary
 from .html_translator import count_translatable_chars, translate_html
 from .toc import translate_toc_and_nav
 
@@ -90,19 +90,19 @@ def translate_epub(
 
     # Load glossary if provided or auto-detect
     glossary: Glossary | None = None
-    glossary_file: Path | None = None
     if glossary_path:
         glossary_file = Path(glossary_path)
         if not glossary_file.exists():
             console.print(f"[red]Glossary not found:[/red] {glossary_path}")
             return
-    else:
-        glossary_file = find_glossary()
-    if glossary_file:
         glossary = load_glossary(glossary_file)
+    else:
+        glossary = load_glossary()  # auto-detect
+
+    if glossary:
         console.print(
-            f"[dim]Glossary:[/dim] {glossary_file}  "
-            f"({len(glossary.characters)} characters, {len(glossary.terms)} terms)"
+            f"[dim]Glossary:[/dim] {len(glossary.characters)} characters, "
+            f"{len(glossary.terms)} terms"
         )
 
     book = epub.read_epub(input_path)

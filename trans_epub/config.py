@@ -1,10 +1,6 @@
 """Configuration system for trans-epub.
 
-Supports loading from:
-  - ./.trans-epub/config.toml  (project-local)
-  - ~/.config/trans-epub/config.toml  (user-global)
-  - An explicit path passed to load_config()
-  - TRANS_EPUB_* environment variables (override file config)
+Unified config + glossary loading with shared TOML helpers.
 """
 
 from __future__ import annotations
@@ -13,71 +9,71 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# ── Search paths ──────────────────────────────────────────────────────────────
 
-@dataclass
-class EngineConfig:
-    """Per-engine overrides (API key, base URL, model, creativity)."""
+_CONFIG_DIR = Path(".trans-epub")
+_USER_CONFIG_DIR = Path.home() / ".config" / "trans-epub"
 
-    api_key: str | None = None
-    base_url: str | None = None
-    model: str | None = None
-    creativity: float | None = None
+
+def _find_file(filename: str) -> Path | None:
+    """Find file in project-local then user-global config dirs."""
+    for base in [_CONFIG_DIR, _USER_CONFIG_DIR]:
+        candidate = base / filename
+        if candidate.exists():
+            return candidate
+    return None
+
+
+# ── TOML loading ──────────────────────────────────────────────────────────────
+
+
+def _load_toml(path: Path) -> dict:
+    """Load TOML file, return empty dict on failure."""
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return {}
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+# ── Main config ───────────────────────────────────────────────────────────────
 
 
 @dataclass
 class GlobalConfig:
-    """Top-level configuration object."""
+    """Top-level configuration."""
 
     engine: str = "auto"
     threads: int = 4
     creativity: float | None = None
-    engines: dict[str, EngineConfig] = field(default_factory=dict)
-
-
-# ── Default search paths ──────────────────────────────────────────────────────
-
-_DEFAULT_PATHS: list[Path] = [
-    Path(".trans-epub") / "config.toml",
-    Path.home() / ".config" / "trans-epub" / "config.toml",
-]
-
-# Map engine name → env-var name for API keys
-_ENGINE_KEY_ENV: dict[str, str] = {
-    "azure": "AZURE_TRANSLATOR_KEY",
-    "gemini": "GEMINI_API_KEY",
-    "deepseek": "DEEPSEEK_API_KEY",
-    "alibaba": "DASHSCOPE_API_KEY",
-    "google": "GOOGLE_TRANSLATE_API_KEY",
-    "deepl": "DEEPL_API_KEY",
-}
-
-
-# ── Public API ────────────────────────────────────────────────────────────────
 
 
 def load_config(path: Path | None = None) -> GlobalConfig:
-    """Load configuration from *path*, the default search paths, or env vars.
+    """Load config from file + env vars.
 
-    Priority (highest → lowest):
-      1. TRANS_EPUB_* environment variables
-      2. Explicit *path* argument
-      3. First found file in _DEFAULT_PATHS
-      4. Built-in defaults
+    Priority: env vars > explicit path > auto-detect > defaults
     """
     cfg = GlobalConfig()
 
-    # Try to load from file
-    config_file: Path | None = path
-    if config_file is None:
-        for candidate in _DEFAULT_PATHS:
-            if candidate.exists():
-                config_file = candidate
-                break
+    # File config
+    config_file = path or _find_file("config.toml")
+    if config_file:
+        data = _load_toml(config_file)
+        defaults = data.get("defaults", {})
+        if "engine" in defaults:
+            cfg.engine = str(defaults["engine"])
+        if "threads" in defaults:
+            cfg.threads = int(defaults["threads"])
+        if "creativity" in defaults:
+            cfg.creativity = float(defaults["creativity"])
 
-    if config_file is not None and config_file.exists():
-        _apply_toml(cfg, config_file)
-
-    # Environment variable overrides
+    # Env overrides
     if env_engine := os.environ.get("TRANS_EPUB_ENGINE"):
         cfg.engine = env_engine
     if env_threads := os.environ.get("TRANS_EPUB_THREADS"):
@@ -94,49 +90,92 @@ def load_config(path: Path | None = None) -> GlobalConfig:
     return cfg
 
 
-def get_api_key(engine: str) -> str | None:
-    """Return the API key for *engine* from environment variables."""
-    env_var = _ENGINE_KEY_ENV.get(engine)
-    if env_var:
-        return os.environ.get(env_var)
-    return None
+# ── Glossary ──────────────────────────────────────────────────────────────────
 
 
-# ── TOML loading (stdlib tomllib, Python 3.11+) ───────────────────────────────
+@dataclass
+class CharacterEntry:
+    """Pronoun mapping for a character."""
+
+    self_ref: str | None = None  # xưng (self-reference)
+    address: str | None = None  # hô (how others address them)
+    narrator: str | None = None  # narrator reference
+    note: str | None = None  # context (age, role, relationship)
+
+    def is_empty(self) -> bool:
+        return not any([self.self_ref, self.address, self.narrator, self.note])
 
 
-def _apply_toml(cfg: GlobalConfig, path: Path) -> None:
-    """Parse *path* as TOML and apply values to *cfg* in-place."""
-    try:
-        import tomllib  # Python 3.11+
-    except ImportError:
-        try:
-            import tomli as tomllib  # type: ignore[no-redef]
-        except ImportError:
-            return  # TOML not available; silently skip
+@dataclass
+class Glossary:
+    """Translation glossary with character pronouns and term mappings."""
 
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return
+    characters: dict[str, CharacterEntry] = field(default_factory=dict)
+    terms: dict[str, str] = field(default_factory=dict)
 
-    defaults = data.get("defaults", {})
-    if "engine" in defaults:
-        cfg.engine = str(defaults["engine"])
-    if "threads" in defaults:
-        cfg.threads = int(defaults["threads"])
-    if "creativity" in defaults:
-        cfg.creativity = float(defaults["creativity"])
+    def is_empty(self) -> bool:
+        return not self.characters and not self.terms
 
-    # [engines.<name>] sections
-    for eng_name, eng_data in data.get("engines", {}).items():
-        ec = EngineConfig()
-        if "api_key" in eng_data:
-            ec.api_key = str(eng_data["api_key"])
-        if "base_url" in eng_data:
-            ec.base_url = str(eng_data["base_url"])
-        if "model" in eng_data:
-            ec.model = str(eng_data["model"])
-        if "creativity" in eng_data:
-            ec.creativity = float(eng_data["creativity"])
-        cfg.engines[eng_name] = ec
+
+def load_glossary(path: Path | None = None) -> Glossary | None:
+    """Load glossary from path or auto-detect.
+
+    Returns None if not found or empty.
+    """
+    glossary_file = path or _find_file("glossary.toml")
+    if not glossary_file:
+        return None
+
+    data = _load_toml(glossary_file)
+    if not data:
+        return None
+
+    characters: dict[str, CharacterEntry] = {}
+    for name, entry in data.get("characters", {}).items():
+        if isinstance(entry, str):
+            # Simple form: John = "anh"
+            characters[name] = CharacterEntry(address=entry)
+        elif isinstance(entry, dict):
+            char = CharacterEntry(
+                self_ref=entry.get("self"),
+                address=entry.get("form"),
+                narrator=entry.get("narrator"),
+                note=entry.get("note"),
+            )
+            if not char.is_empty():
+                characters[name] = char
+
+    terms: dict[str, str] = data.get("terms", {})
+
+    glossary = Glossary(characters=characters, terms=terms)
+    return None if glossary.is_empty() else glossary
+
+
+def build_glossary_prompt(glossary: Glossary) -> str:
+    """Build prompt section from glossary for LLM injection."""
+    if glossary.is_empty():
+        return ""
+
+    parts = ["\nGlossary (follow strictly for consistency):"]
+
+    if glossary.characters:
+        parts.append("Characters (pronouns):")
+        for name, entry in glossary.characters.items():
+            details = []
+            if entry.self_ref:
+                details.append(f'self="{entry.self_ref}"')
+            if entry.address:
+                details.append(f'address="{entry.address}"')
+            if entry.narrator:
+                details.append(f'narrator="{entry.narrator}"')
+            detail_str = ", ".join(details)
+            if entry.note:
+                detail_str += f" — {entry.note}"
+            parts.append(f"• {name}: {detail_str}")
+
+    if glossary.terms:
+        parts.append("Terms:")
+        for eng, vi in glossary.terms.items():
+            parts.append(f'• "{eng}" → "{vi}"')
+
+    return "\n".join(parts) + "\n"

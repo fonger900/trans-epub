@@ -13,7 +13,7 @@ Public API:
 """
 
 from .cli import __version__, main, resolve_engine  # noqa: F401
-from .config import get_api_key, load_config  # noqa: F401
+from .config import load_config  # noqa: F401
 from .engines import (  # noqa: F401
     ENGINES,
     EngineConfig,

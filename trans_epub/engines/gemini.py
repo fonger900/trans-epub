@@ -43,12 +43,9 @@ def gemini_translate(
     creativity: float | None = None,
     glossary: Glossary | None = None,
 ) -> list[str]:
-    # Import here to avoid circular imports
-    from ..config import get_api_key
-
-    key = os.environ.get("GEMINI_API_KEY") or get_api_key("gemini")
+    key = os.environ.get("GEMINI_API_KEY")
     if not key:
-        raise RuntimeError("GEMINI_API_KEY not found in environment or config")
+        raise RuntimeError("GEMINI_API_KEY not found in environment")
 
     model = os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
 

@@ -10,8 +10,8 @@ from typing import Callable
 from bs4 import BeautifulSoup, Tag
 from bs4.element import NavigableString
 
+from .config import Glossary
 from .engines import EMPHASIS_TAGS, ENGINES
-from .glossary import Glossary
 
 # Tags whose text content should be translated
 TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}

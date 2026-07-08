@@ -26,13 +26,9 @@ def deepseek_translate(
     creativity: float | None = None,
     glossary: Glossary | None = None,
 ) -> list[str]:
-    # Import here to avoid circular imports
-    from ..config import get_api_key
-
-    # Get API key from environment variable first, then from config
-    key = os.environ.get("DEEPSEEK_API_KEY") or get_api_key("deepseek")
+    key = os.environ.get("DEEPSEEK_API_KEY")
     if not key:
-        raise RuntimeError("DEEPSEEK_API_KEY not found in environment or config")
+        raise RuntimeError("DEEPSEEK_API_KEY not found in environment")
 
     temperature = DEFAULT_DEEPSEEK_CREATIVITY if creativity is None else creativity
 

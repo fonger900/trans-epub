@@ -18,12 +18,9 @@ _DEFAULT_BASE = "https://api-free.deepl.com/v2/translate"
 
 
 def deepl_translate(texts: list[str], **_kwargs) -> list[str]:
-    # Import here to avoid circular imports
-    from ..config import get_api_key
-
-    key = os.environ.get("DEEPL_API_KEY") or get_api_key("deepl")
+    key = os.environ.get("DEEPL_API_KEY")
     if not key:
-        raise RuntimeError("DEEPL_API_KEY not found in environment or config")
+        raise RuntimeError("DEEPL_API_KEY not found in environment")
 
     base = os.environ.get("DEEPL_API_BASE", _DEFAULT_BASE)
 

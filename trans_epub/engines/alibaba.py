@@ -45,13 +45,9 @@ def alibaba_translate(
     creativity: float | None = None,
     glossary: Glossary | None = None,
 ) -> list[str]:
-    # Import here to avoid circular imports
-    from ..config import get_api_key
-
-    # Get API key from environment variable first, then from config
-    key = os.environ.get("DASHSCOPE_API_KEY") or get_api_key("alibaba")
+    key = os.environ.get("DASHSCOPE_API_KEY")
     if not key:
-        raise RuntimeError("DASHSCOPE_API_KEY not found in environment or config")
+        raise RuntimeError("DASHSCOPE_API_KEY not found in environment")
 
     # Determine the base URL - prioritize custom base URL, then workspace ID, then default
     custom_base = os.environ.get("DASHSCOPE_API_BASE")

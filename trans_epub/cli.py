@@ -6,7 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .config import get_api_key, load_config
+from .config import load_config
 from .epub_translator import translate_epub
 
 try:
@@ -39,17 +39,9 @@ def resolve_engine(engine: str) -> str:
     if os.environ.get("DEEPL_API_KEY"):
         return "deepl"
 
-    # Check config file
-    engines_to_check = ["azure", "gemini", "deepseek", "alibaba", "google", "deepl"]
-    for engine_name in engines_to_check:
-        key = get_api_key(engine_name)
-        if key:
-            return engine_name
-
     raise RuntimeError(
         "No translation API key found. "
-        "Set AZURE_TRANSLATOR_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, or DASHSCOPE_API_KEY, "
-        "or configure in ~/.config/trans-epub/config.toml."
+        "Set AZURE_TRANSLATOR_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, or DASHSCOPE_API_KEY."
     )
 
 

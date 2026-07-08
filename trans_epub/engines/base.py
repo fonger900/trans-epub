@@ -21,7 +21,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 if TYPE_CHECKING:
-    from ..glossary import Glossary
+    from ..config import Glossary
 
 # ── Shared HTTP session ────────────────────────────────────────────────────────
 
@@ -175,7 +175,7 @@ def call_with_retry(
 
 def build_prompt(glossary: Glossary | None = None) -> str:
     """Build full system prompt, optionally including glossary."""
-    from ..glossary import build_glossary_prompt
+    from ..config import build_glossary_prompt
 
     prompt = LLM_PROMPT
     if glossary:
