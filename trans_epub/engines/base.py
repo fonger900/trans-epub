@@ -144,11 +144,37 @@ def call_with_retry(
             time.sleep(wait)
             continue
 
-        if resp.status_code == 429:
-            wait = min(int(resp.headers.get("Retry-After", 3 * 2**attempt)), 60)
-            print(
-                f"\n    Rate limited ({label}), waiting {wait}s...", end=" ", flush=True
-            )
+        if resp.status_code == 429 or resp.status_code == 403:
+            # Check for quota exceeded in response body
+            resp_text = resp.text.lower()
+            quota_keywords = [
+                "quota",
+                "limit exceeded",
+                "daily limit",
+                "bandwidth",
+                "usage exceeded",
+                "rate limit",
+                "insufficient quota",
+                "billing",
+                "payment required",
+            ]
+            is_quota_issue = any(kw in resp_text for kw in quota_keywords)
+
+            if is_quota_issue:
+                wait = min(int(resp.headers.get("Retry-After", 3 * 2**attempt)), 300)
+                print(
+                    f"\n    Quota exceeded ({label}), waiting {wait}s... "
+                    f"Check API quota or adjust creativity/char_limit.",
+                    end=" ",
+                    flush=True,
+                )
+            else:
+                wait = min(int(resp.headers.get("Retry-After", 3 * 2**attempt)), 60)
+                print(
+                    f"\n    Rate limited ({label}), waiting {wait}s...",
+                    end=" ",
+                    flush=True,
+                )
             time.sleep(wait)
             continue
 

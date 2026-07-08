@@ -335,9 +335,23 @@ def translate_epub(
         )
         for name, e in failed:
             console.print(f"  [red]•[/red] {name}: {e}")
+        console.print(
+            "\n[dim]Tips:[/dim]"
+            " If quota exceeded: reduce creativity, increase delay between requests,"
+            " or check API quota limits."
+        )
 
     console.print(
         f"[bold green]✓ Done[/bold green] → {output_path}  "
         f"([dim]{total_chars:,} chars translated ({total_chars // 4:,} tokens)[/dim], "
         f"[dim]{cached_chars:,} cached[/dim])"
     )
+
+    # Tip for quota-related failures
+    if any("quota" in e.lower() for _, e in failed) or any(
+        "limit" in e.lower() for _, e in failed
+    ):
+        console.print(
+            "\n[dim]Note: If API quota exceeded, try --fresh to start fresh or "
+            "reduce --creativity to lower token usage."
+        )
