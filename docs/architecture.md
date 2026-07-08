@@ -62,7 +62,7 @@ epub_translator.translate_epub()
 ### `cli.py` (122 lines)
 
 - Loads `.env` via `python-dotenv`
-- Loads config via `load_config()`
+- Uses hardcoded defaults (engine=auto, threads=4, creativity=None)
 - Parses `--items` ranges (e.g. `1-5,8`)
 - Resolves `auto` engine by checking env vars in a fixed priority order
 - `--glossary` / `-g` flag for character pronoun matrix
@@ -70,23 +70,21 @@ epub_translator.translate_epub()
 - Calls `translate_epub()` with parsed args
 - Returns exit code 0
 
-### `config.py` (142 lines)
+### `config.py` (181 lines)
 
-Two dataclasses: `GlobalConfig` (engine, threads, creativity) and glossary-related structures (`CharacterConfig`, `Glossary`).
+Glossary loading only — no runtime config.
 
-Config load priority (highest first):
-1. `TRANS_EPUB_*` environment variables
-2. Explicit `--config` path
-3. `./.trans-epub/config.toml`
-4. `~/.config/trans-epub/config.toml`
-5. Built-in defaults
+Dataclasses: `CharacterEntry` (pronoun mapping), `Glossary` (characters + terms).
+
+Helpers: `_find_file()` (search .trans-epub/ + ~/.config/...), `_load_toml()` (tomllib with fallback).
+
+- `load_glossary(path=None)` — auto-detect or explicit path
+- `build_glossary_prompt(glossary)` — generate LLM prompt section for pronoun consistency
 
 Glossary auto-detection:
 1. Explicit `--glossary` path
 2. `./.trans-epub/glossary.toml`
 3. `~/.config/trans-epub/glossary.toml`
-
-`build_glossary_prompt()` generates pronoun matrix instructions injected into LLM system prompts for consistent character voices.
 
 ### `epub_translator.py` (276 lines)
 

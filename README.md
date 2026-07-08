@@ -83,13 +83,13 @@ cp .env.example .env
 
 ### Settings
 
-Configuration file locations (searched in order):
-- `./.trans-epub/config.toml` (project-specific)
-- `~/.config/trans-epub/config.toml` (user-global)
+Defaults are built into the CLI:
 
-Config values are overridden by `TRANS_EPUB_*` environment variables.
+- `--engine auto` — auto-detects engine from available API keys
+- `--threads 4` — concurrent translation threads
+- `--creativity` — LLM temperature (engine defaults if not set)
 
-See [.trans-epub/config.example.toml](.trans-epub/config.example.toml) for all options.
+No config file needed. Use CLI flags or environment variables (`TRANS_EPUB_ENGINE`, `TRANS_EPUB_THREADS`, `TRANS_EPUB_CREATIVITY`).
 
 ### Glossary (pronoun matrix + terminology)
 

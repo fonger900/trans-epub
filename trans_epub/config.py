@@ -1,11 +1,10 @@
 """Configuration system for trans-epub.
 
-Unified config + glossary loading with shared TOML helpers.
+Glossary loading for character pronouns and terminology.
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -40,54 +39,6 @@ def _load_toml(path: Path) -> dict:
         return tomllib.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
-
-
-# ── Main config ───────────────────────────────────────────────────────────────
-
-
-@dataclass
-class GlobalConfig:
-    """Top-level configuration."""
-
-    engine: str = "auto"
-    threads: int = 4
-    creativity: float | None = None
-
-
-def load_config(path: Path | None = None) -> GlobalConfig:
-    """Load config from file + env vars.
-
-    Priority: env vars > explicit path > auto-detect > defaults
-    """
-    cfg = GlobalConfig()
-
-    # File config
-    config_file = path or _find_file("config.toml")
-    if config_file:
-        data = _load_toml(config_file)
-        defaults = data.get("defaults", {})
-        if "engine" in defaults:
-            cfg.engine = str(defaults["engine"])
-        if "threads" in defaults:
-            cfg.threads = int(defaults["threads"])
-        if "creativity" in defaults:
-            cfg.creativity = float(defaults["creativity"])
-
-    # Env overrides
-    if env_engine := os.environ.get("TRANS_EPUB_ENGINE"):
-        cfg.engine = env_engine
-    if env_threads := os.environ.get("TRANS_EPUB_THREADS"):
-        try:
-            cfg.threads = int(env_threads)
-        except ValueError:
-            pass
-    if env_creativity := os.environ.get("TRANS_EPUB_CREATIVITY"):
-        try:
-            cfg.creativity = float(env_creativity)
-        except ValueError:
-            pass
-
-    return cfg
 
 
 # ── Glossary ──────────────────────────────────────────────────────────────────

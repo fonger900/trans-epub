@@ -1,52 +1,150 @@
-# Tests for configuration system.
+"""Tests for glossary loading."""
 
-import os
 import tempfile
 from pathlib import Path
 
-from trans_epub.config import GlobalConfig, load_config
+from trans_epub.config import (
+    CharacterEntry,
+    Glossary,
+    _find_file,
+    _load_toml,
+    build_glossary_prompt,
+    load_glossary,
+)
 
 
-class TestLoadConfig:
-    def test_default_values(self):
-        config = load_config(None)
-        assert config.engine == "auto"
-        assert config.threads == 4
-        assert config.creativity is None
+class TestFindFile:
+    def test_returns_path_when_exists(self, tmp_path, monkeypatch):
+        (tmp_path / "glossary.toml").write_text("")
+        monkeypatch.setattr("trans_epub.config._CONFIG_DIR", tmp_path)
+        result = _find_file("glossary.toml")
+        assert result is not None
+        assert result.name == "glossary.toml"
 
-    def test_env_var_overrides(self, monkeypatch):
-        monkeypatch.setenv("TRANS_EPUB_ENGINE", "alibaba")
-        monkeypatch.setenv("TRANS_EPUB_THREADS", "8")
-        monkeypatch.setenv("TRANS_EPUB_CREATIVITY", "0.7")
-        config = load_config(None)
-        assert config.engine == "alibaba"
-        assert config.threads == 8
-        assert config.creativity == 0.7
+    def test_returns_none_when_not_found(self, monkeypatch):
+        monkeypatch.setattr(
+            "trans_epub.config._CONFIG_DIR", Path("/nonexistent_dir_xyz")
+        )
+        monkeypatch.setattr(
+            "trans_epub.config._USER_CONFIG_DIR", Path("/nonexistent_dir_xyz")
+        )
+        assert _find_file("glossary.toml") is None
 
-    def test_toml_file_loading(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write('[defaults]\nengine = "azure"\nthreads = 4\ncreativity = 0.3\n\n')
+
+class TestLoadToml:
+    def test_loads_valid_toml(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as f:
+            f.write('[characters]\nJohn = "anh"\n')
             f.flush()
-            config = load_config(Path(f.name))
-            assert config.engine == "azure"
-            assert config.threads == 4
-            assert config.creativity == 0.3
-            os.unlink(f.name)
+            data = _load_toml(Path(f.name))
+            assert data["characters"]["John"] == "anh"
+            Path(f.name).unlink()
 
-    def test_env_overrides_toml(self, monkeypatch):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write('[defaults]\nengine = "azure"\nthreads = 4\n')
+    def test_returns_empty_on_invalid(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as f:
+            f.write("not valid toml[[[")
             f.flush()
-            monkeypatch.setenv("TRANS_EPUB_ENGINE", "gemini")
-            config = load_config(Path(f.name))
-            assert config.engine == "gemini"  # env wins
-            assert config.threads == 4  # from file
-            os.unlink(f.name)
+            data = _load_toml(Path(f.name))
+            assert data == {}
+            Path(f.name).unlink()
 
 
-class TestConfigStructures:
-    def test_global_config_attributes(self):
-        cfg = GlobalConfig()
-        assert hasattr(cfg, "engine")
-        assert hasattr(cfg, "threads")
-        assert hasattr(cfg, "creativity")
+class TestLoadGlossary:
+    def test_simple_character(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as f:
+            f.write('[characters]\nJohn = "anh"\n')
+            f.flush()
+            glossary = load_glossary(Path(f.name))
+            assert glossary is not None
+            assert "John" in glossary.characters
+            assert glossary.characters["John"].address == "anh"
+            Path(f.name).unlink()
+
+    def test_detailed_character(self):
+        toml = """\
+[characters.John]
+self = "tôi"
+form = "anh"
+narrator = "anh ấy"
+note = "ông chủ, ~40 tuổi"
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as f:
+            f.write(toml)
+            f.flush()
+            glossary = load_glossary(Path(f.name))
+            assert glossary is not None
+            entry = glossary.characters["John"]
+            assert entry.self_ref == "tôi"
+            assert entry.address == "anh"
+            assert entry.narrator == "anh ấy"
+            assert entry.note == "ông chủ, ~40 tuổi"
+            Path(f.name).unlink()
+
+    def test_terms(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as f:
+            f.write('[terms]\n"machine learning" = "học máy"\n')
+            f.flush()
+            glossary = load_glossary(Path(f.name))
+            assert glossary is not None
+            assert glossary.terms["machine learning"] == "học máy"
+            Path(f.name).unlink()
+
+    def test_returns_none_for_empty(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as f:
+            f.write("[characters]\n")
+            f.flush()
+            glossary = load_glossary(Path(f.name))
+            assert glossary is None
+            Path(f.name).unlink()
+
+    def test_returns_none_for_missing_file(self):
+        glossary = load_glossary(Path("/nonexistent/glossary.toml"))
+        assert glossary is None
+
+
+class TestCharacterEntry:
+    def test_is_empty_for_default(self):
+        assert CharacterEntry().is_empty()
+
+    def test_not_empty_with_self_ref(self):
+        assert not CharacterEntry(self_ref="tôi").is_empty()
+
+    def test_not_empty_with_address(self):
+        assert not CharacterEntry(address="anh").is_empty()
+
+
+class TestBuildGlossaryPrompt:
+    def test_characters_in_prompt(self):
+        glossary = Glossary(
+            characters={
+                "John": CharacterEntry(
+                    self_ref="tôi", address="anh", narrator="anh ấy"
+                )
+            }
+        )
+        prompt = build_glossary_prompt(glossary)
+        assert "John" in prompt
+        assert 'self="tôi"' in prompt
+        assert 'address="anh"' in prompt
+        assert 'narrator="anh ấy"' in prompt
+
+    def test_terms_in_prompt(self):
+        glossary = Glossary(terms={"machine learning": "học máy"})
+        prompt = build_glossary_prompt(glossary)
+        assert "machine learning" in prompt
+        assert "học máy" in prompt
+
+    def test_empty_glossary_returns_empty_string(self):
+        assert build_glossary_prompt(Glossary()) == ""

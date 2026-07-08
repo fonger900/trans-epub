@@ -8,12 +8,12 @@ Public API:
   resolve_engine   — resolve 'auto' to a concrete engine name
   ENGINES          — engine registry dict
   main             — CLI entry point
-  config           — configuration system
+  config           — glossary + pronoun matrix loader
   __version__      — version string
 """
 
 from .cli import __version__, main, resolve_engine  # noqa: F401
-from .config import load_config  # noqa: F401
+from .config import load_glossary  # noqa: F401
 from .engines import (  # noqa: F401
     ENGINES,
     EngineConfig,

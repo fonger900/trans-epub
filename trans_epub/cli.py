@@ -6,7 +6,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .config import load_config
 from .epub_translator import translate_epub
 
 try:
@@ -48,9 +47,6 @@ def resolve_engine(engine: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
 
-    # Load config early to get defaults
-    config = load_config()
-
     parser = argparse.ArgumentParser(description="Translate EPUB EN→VI")
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -61,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         "--engine",
         "-e",
         choices=["auto", "azure", "gemini", "deepseek", "alibaba", "google", "deepl"],
-        default=config.engine,
+        default="auto",
     )
     parser.add_argument(
         "--items",
@@ -73,19 +69,14 @@ def main(argv: list[str] | None = None) -> int:
         "--threads",
         "-t",
         type=int,
-        default=config.threads,
+        default=4,
         help="Number of parallel translation threads",
     )
     parser.add_argument(
         "--creativity",
         type=float,
-        default=config.creativity,
+        default=None,
         help="Model creativity/temperature for Gemini, DeepSeek, and Alibaba",
-    )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        help="Path to configuration file (default: search in standard locations)",
     )
     parser.add_argument(
         "--glossary",
