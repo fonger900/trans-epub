@@ -172,7 +172,12 @@ def extract_translations(raw_json: str) -> list[str]:
                     repaired2 = _repair_truncated_json(repaired)
                     data = json.loads(repaired2)
                 except json.JSONDecodeError:
-                    data = ast.literal_eval(raw_json)
+                    try:
+                        data = ast.literal_eval(raw_json)
+                    except Exception as e:
+                        raise ValueError(
+                            f"All JSON repair strategies failed: {e}"
+                        ) from e
 
     if isinstance(data, list):
         return data
@@ -274,9 +279,9 @@ def call_with_retry(
 
         try:
             return parse_fn(resp)
-        except (json.JSONDecodeError, ValueError) as e:
+        except Exception as e:
             print(
-                f"\n    JSON parse error ({label}): {e}. Retrying...",
+                f"\n    Parse error ({label}): {e}. Retrying...",
                 end=" ",
                 flush=True,
             )
