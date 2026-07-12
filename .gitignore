@@ -12,3 +12,4 @@ wheels/
 *.epub
 *.json
 .env
+*.txt
