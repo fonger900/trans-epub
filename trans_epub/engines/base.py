@@ -221,7 +221,12 @@ def call_with_retry(
 
         if 400 <= resp.status_code < 500 and resp.status_code != 429:
             # 4xx (except 429) = bad request, retrying won't help
-            resp.raise_for_status()
+            body = (resp.text or "")[:2000]
+            raise requests.exceptions.HTTPError(
+                f"400 Client Error: Bad Request for url: {resp.url}\n"
+                f"Response body: {body}",
+                response=resp,
+            )
 
         resp.raise_for_status()
 
