@@ -95,6 +95,11 @@ def translate_epub(
         json.loads(cache_path.read_text()) if cache_path.exists() and not fresh else {}
     )
 
+    # Reset Gemini token counters for this run
+    if engine == "gemini":
+        from .engines.gemini import reset_gemini_usage
+        reset_gemini_usage()
+
     # Load glossary if provided or auto-detect
     glossary: Glossary | None = None
     if glossary_path:
@@ -156,6 +161,16 @@ def translate_epub(
         f"[bold]Cached:[/bold] {cached_chars:,} chars  "
         f"[bold]Pending:[/bold] {pending_chars:,} chars"
     )
+
+    # ── Cost estimate (Gemini only) ──────────────────────────────────────────
+    if engine == "gemini" and pending_chars > 0:
+        from .engines.gemini import estimate_gemini_cost
+
+        est = estimate_gemini_cost(pending_chars)
+        if est > 0:
+            console.print(f"[bold]Est. cost:[/bold] ${est:.4f}")
+        else:
+            console.print("[bold]Est. cost:[/bold] [green]free[/green]")
 
     # ── Prompt y/n to proceed (only in interactive mode) ──────────────────────
     if sys.stdin.isatty():
@@ -339,6 +354,25 @@ def translate_epub(
             " If quota exceeded: reduce creativity, increase delay between requests,"
             " or check API quota limits."
         )
+
+    # ── Cost summary (Gemini only) ───────────────────────────────────────────
+    if engine == "gemini":
+        from .engines.gemini import actual_gemini_cost, get_gemini_usage
+
+        cost = actual_gemini_cost()
+        prompt_tok, output_tok = get_gemini_usage()
+        if cost > 0:
+            console.print(
+                f"[bold]Cost:[/bold] ${cost:.4f}  "
+                f"([dim]{prompt_tok:,} in + {output_tok:,} out = "
+                f"{prompt_tok + output_tok:,} tokens[/dim])"
+            )
+        elif prompt_tok + output_tok > 0:
+            console.print(
+                f"[bold]Cost:[/bold] [green]free[/green]  "
+                f"([dim]{prompt_tok:,} in + {output_tok:,} out = "
+                f"{prompt_tok + output_tok:,} tokens[/dim])"
+            )
 
     console.print(
         f"[bold green]✓ Done[/bold green] → {output_path}  "
