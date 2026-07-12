@@ -102,6 +102,7 @@ def translate_html(
     creativity: float | None = None,
     progress_cb: ProgressCallback | None = None,
     glossary: Glossary | None = None,
+    extra_prompt: str = "",
 ) -> tuple[bytes, int]:
     """Translate all translatable text nodes in *html_bytes*.
 
@@ -143,7 +144,7 @@ def translate_html(
     def translate_batch(batch_texts: list[str]) -> list[str]:
         try:
             result = cfg.translate(
-                batch_texts, creativity=creativity, glossary=glossary
+                batch_texts, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt
             )
             if len(result) == len(batch_texts):
                 return result

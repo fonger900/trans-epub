@@ -292,13 +292,15 @@ def call_with_retry(
     raise RuntimeError(f"{engine_name} translation failed: all retries exhausted")
 
 
-def build_prompt(glossary: Glossary | None = None) -> str:
-    """Build full system prompt, optionally including glossary."""
+def build_prompt(glossary: Glossary | None = None, extra_prompt: str = "") -> str:
+    """Build full system prompt, optionally including glossary and extra instructions."""
     from ..config import build_glossary_prompt
 
     prompt = LLM_PROMPT
     if glossary:
         prompt += build_glossary_prompt(glossary)
+    if extra_prompt:
+        prompt += "\nAdditional instructions for this book:\n" + extra_prompt.strip() + "\n"
     return prompt
 
 
@@ -307,9 +309,10 @@ def translate_texts(
     texts: list[str],
     creativity: float | None = None,
     glossary: Glossary | None = None,
+    extra_prompt: str = "",
 ) -> list[str]:
     """Dispatch translation to the appropriate engine function."""
     cfg = ENGINES[engine]
     if engine in ("gemini", "deepseek", "alibaba"):
-        return cfg.translate(texts, creativity=creativity, glossary=glossary)
+        return cfg.translate(texts, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt)
     return cfg.translate(texts)

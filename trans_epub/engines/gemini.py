@@ -44,6 +44,7 @@ def gemini_translate(
     texts: list[str],
     creativity: float | None = None,
     glossary: Glossary | None = None,
+    extra_prompt: str = "",
 ) -> list[str]:
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
@@ -57,7 +58,7 @@ def gemini_translate(
     if max_tokens := os.environ.get("GEMINI_MAX_TOKENS"):
         generation_config["maxOutputTokens"] = int(max_tokens)
 
-    prompt = build_prompt(glossary) + json.dumps({"texts": texts}, ensure_ascii=False)
+    prompt = build_prompt(glossary, extra_prompt) + json.dumps({"texts": texts}, ensure_ascii=False)
 
     def do_request():
         return http_session.post(

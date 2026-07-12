@@ -20,6 +20,7 @@ def translate_toc_and_nav(
     cache: dict[str, str],
     creativity: float | None = None,
     glossary: Glossary | None = None,
+    extra_prompt: str = "",
 ) -> None:
     """Translate TOC link titles and the EPUB nav document in-place.
 
@@ -52,7 +53,7 @@ def translate_toc_and_nav(
 
         if titles:  # Not cached — translate via API
             translated_titles = ENGINES[engine].translate(
-                titles, creativity=creativity, glossary=glossary
+                titles, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt
             )
             cache[_TOC_KEY] = json.dumps(translated_titles, ensure_ascii=False)
             for link, translated in zip(links, translated_titles):
@@ -73,7 +74,7 @@ def translate_toc_and_nav(
             if text:
                 anchor.string = text
         translated_html, _ = translate_html(
-            soup.encode("utf-8"), engine, creativity=creativity, glossary=glossary
+            soup.encode("utf-8"), engine, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt
         )
         cache[nav_name] = translated_html.decode("utf-8")
         item.set_content(translated_html)

@@ -89,6 +89,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Ignore existing cache, translation fresh",
     )
+    parser.add_argument(
+        "--prompt",
+        "-p",
+        type=Path,
+        help="Path to a text file with additional prompt instructions for this book (auto-detects .trans-epub/prompt.txt)",
+    )
     args = parser.parse_args(argv)
 
     out = args.output or args.input.replace(".epub", "_vi.epub")
@@ -104,6 +110,20 @@ def main(argv: list[str] | None = None) -> int:
                 only.add(int(part))
 
     engine = resolve_engine(args.engine)
+
+    # Resolve extra prompt: explicit --prompt flag or auto-detect .trans-epub/prompt.txt
+    extra_prompt = ""
+    prompt_file: Path | None = args.prompt
+    if not prompt_file:
+        # Auto-detect in project-local then user-global config dirs
+        for base in [Path(".trans-epub"), Path.home() / ".config" / "trans-epub"]:
+            candidate = base / "prompt.txt"
+            if candidate.exists():
+                prompt_file = candidate
+                break
+    if prompt_file and prompt_file.exists():
+        extra_prompt = prompt_file.read_text(encoding="utf-8").strip()
+
     translate_epub(
         args.input,
         out,
@@ -114,5 +134,6 @@ def main(argv: list[str] | None = None) -> int:
         creativity=args.creativity,
         glossary_path=str(args.glossary) if args.glossary else None,
         fresh=args.fresh,
+        extra_prompt=extra_prompt,
     )
     return 0

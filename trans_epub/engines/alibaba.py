@@ -44,6 +44,7 @@ def alibaba_translate(
     texts: list[str],
     creativity: float | None = None,
     glossary: Glossary | None = None,
+    extra_prompt: str = "",
 ) -> list[str]:
     key = os.environ.get("DASHSCOPE_API_KEY")
     if not key:
@@ -67,7 +68,7 @@ def alibaba_translate(
     max_tokens = int(os.environ.get("DASHSCOPE_MAX_TOKENS", _DEFAULT_MAX_TOKENS))
     temperature = DEFAULT_ALIBABA_CREATIVITY if creativity is None else creativity
 
-    prompt = build_prompt(glossary) + json.dumps({"texts": texts}, ensure_ascii=False)
+    prompt = build_prompt(glossary, extra_prompt) + json.dumps({"texts": texts}, ensure_ascii=False)
 
     def do_request():
         return http_session.post(

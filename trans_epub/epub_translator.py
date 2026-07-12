@@ -83,10 +83,12 @@ def translate_epub(
     creativity: float | None = None,
     glossary_path: str | None = None,
     fresh: bool = False,
+    extra_prompt: str = "",
 ) -> None:
     """Translate *input_path* from English to Vietnamese and write *output_path*.
 
     If *fresh* is True, ignore existing cache and translate all items.
+    *extra_prompt* appends additional book-specific instructions to the LLM prompt.
     """
     cache_path = Path(output_path + ".cache.json")
     cache: dict[str, str] = (
@@ -257,6 +259,7 @@ def translate_epub(
                 creativity=creativity,
                 progress_cb=on_progress,
                 glossary=glossary,
+                extra_prompt=extra_prompt,
             )
         except Exception as e:
             progress.update(worker_tasks[wid], visible=False)
@@ -289,7 +292,7 @@ def translate_epub(
 
     with progress:
         translate_toc_and_nav(
-            book, engine, cache, creativity=creativity, glossary=glossary
+            book, engine, cache, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt
         )
         cache_path.write_text(json.dumps(cache, ensure_ascii=False))
         progress.update(toc_task, advance=1, visible=False)
