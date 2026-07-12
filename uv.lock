@@ -122,6 +122,15 @@ wheels = [
 ]
 
 [[package]]
+name = "json-repair"
+version = "0.61.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/74/b9/c8aed7523d766aab744ef5769b7ff7263449bbf886301eb741b70494fc75/json_repair-0.61.3.tar.gz", hash = "sha256:0c27b21b44d726e8bbe00689e0b9948c1dbb8b69911d859b0bb058033dd41cd1", size = 51072, upload-time = "2026-07-11T16:03:57.174Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/18/b4/01fe7a06551bb8d2a439cf6adc8caa5290d7d5d9f31fb05570d82edefb1c/json_repair-0.61.3-py3-none-any.whl", hash = "sha256:135b8a4e76f4e01dd64f1a302f3f498ac7a8564bb44fbd6d9b04cafa8dba75a9", size = 49596, upload-time = "2026-07-11T16:03:56.073Z" },
+]
+
+[[package]]
 name = "lxml"
 version = "6.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -334,6 +343,7 @@ source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "ebooklib" },
+    { name = "json-repair" },
     { name = "lxml" },
     { name = "python-dotenv" },
     { name = "requests" },
@@ -350,6 +360,7 @@ dev = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "ebooklib", specifier = ">=0.18" },
+    { name = "json-repair", specifier = ">=0.61.3" },
     { name = "lxml", specifier = ">=5.2" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "requests", specifier = ">=2.32" },

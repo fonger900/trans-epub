@@ -108,6 +108,36 @@ LLM_PROMPT = (
 # ── Shared utilities ───────────────────────────────────────────────────────────
 
 
+def _repair_truncated_json(text: str) -> str:
+    """Attempt to close unclosed JSON brackets/braces in truncated output."""
+    # Count unclosed brackets/braces and append closing characters.
+    stack: list[str] = []
+    in_string = False
+    escape = False
+    for ch in text:
+        if escape:
+            escape = False
+            continue
+        if ch == "\\" and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if stack and stack[-1] == ch:
+                stack.pop()
+    # Close any unclosed strings then close brackets/braces in reverse order.
+    if in_string:
+        text += '"'
+    text += "".join(reversed(stack))
+    return text
+
+
 def extract_translations(raw_json: str) -> list[str]:
     """Parse a JSON translation response from an LLM, repairing common issues."""
     raw_json = (
@@ -130,7 +160,19 @@ def extract_translations(raw_json: str) -> list[str]:
         try:
             data = json.loads(repaired)
         except json.JSONDecodeError:
-            data = ast.literal_eval(raw_json)
+            # Try json_repair (handles missing commas, trailing commas,
+            # unescaped chars, truncation, etc.)
+            try:
+                from json_repair import repair_json
+
+                data = json.loads(repair_json(repaired))
+            except Exception:
+                # Last resort: try to close truncated JSON, then ast.literal_eval
+                try:
+                    repaired2 = _repair_truncated_json(repaired)
+                    data = json.loads(repaired2)
+                except json.JSONDecodeError:
+                    data = ast.literal_eval(raw_json)
 
     if isinstance(data, list):
         return data
@@ -221,7 +263,7 @@ def call_with_retry(
 
         if 400 <= resp.status_code < 500 and resp.status_code != 429:
             # 4xx (except 429) = bad request, retrying won't help
-            body = (resp.text or "")[:2000]
+            body = str(resp.text or "")[:2000]
             raise requests.exceptions.HTTPError(
                 f"400 Client Error: Bad Request for url: {resp.url}\n"
                 f"Response body: {body}",

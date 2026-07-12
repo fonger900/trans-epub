@@ -25,7 +25,7 @@ dependencies = [
     "requests>=2.32",
     "python-dotenv>=1.0",
     "rich>=13",
-
+    "json-repair>=0.61.3",
 ]
 
 [project.scripts]

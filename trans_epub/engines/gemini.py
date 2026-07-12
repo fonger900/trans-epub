@@ -24,7 +24,8 @@ from .base import (
 if TYPE_CHECKING:
     from ..config import Glossary
 
-_DEFAULT_MODEL = "gemini-2.5-flash"
+# _DEFAULT_MODEL = "gemini-3.1-flash-lite"
+_DEFAULT_MODEL = "gemini-3.1-pro-preview"
 
 # Permit all safety categories so Gemini doesn't block literary content
 _SAFETY_SETTINGS = [
@@ -71,7 +72,25 @@ def gemini_translate(
         )
 
     def parse(resp):
-        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        body = resp.json()
+        # Check for API-level errors first
+        if "error" in body:
+            raise ValueError(f"Gemini API error: {body['error']}")
+        if "candidates" not in body or not body["candidates"]:
+            # Possibly blocked by safety filters
+            finish_reason = None
+            if "promptFeedback" in body:
+                finish_reason = body["promptFeedback"].get("blockReason")
+            raise ValueError(
+                f"Gemini returned no candidates (blocked? {finish_reason})"
+            )
+        candidate = body["candidates"][0]
+        if "finishReason" in candidate and candidate["finishReason"] != "STOP":
+            raise ValueError(
+                f"Gemini finish reason: {candidate['finishReason']} "
+                f"(may indicate truncation — try increasing GEMINI_MAX_TOKENS)"
+            )
+        raw = candidate["content"]["parts"][0]["text"]
         return extract_translations(raw)
 
     return call_with_retry(
