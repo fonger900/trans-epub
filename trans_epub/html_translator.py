@@ -144,7 +144,10 @@ def translate_html(
     def translate_batch(batch_texts: list[str]) -> list[str]:
         try:
             result = cfg.translate(
-                batch_texts, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt
+                batch_texts,
+                creativity=creativity,
+                glossary=glossary,
+                extra_prompt=extra_prompt,
             )
             if len(result) == len(batch_texts):
                 return result

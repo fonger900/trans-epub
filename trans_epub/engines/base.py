@@ -300,7 +300,9 @@ def build_prompt(glossary: Glossary | None = None, extra_prompt: str = "") -> st
     if glossary:
         prompt += build_glossary_prompt(glossary)
     if extra_prompt:
-        prompt += "\nAdditional instructions for this book:\n" + extra_prompt.strip() + "\n"
+        prompt += (
+            "\nAdditional instructions for this book:\n" + extra_prompt.strip() + "\n"
+        )
     return prompt
 
 
@@ -314,5 +316,7 @@ def translate_texts(
     """Dispatch translation to the appropriate engine function."""
     cfg = ENGINES[engine]
     if engine in ("gemini", "deepseek", "alibaba"):
-        return cfg.translate(texts, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt)
+        return cfg.translate(
+            texts, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt
+        )
     return cfg.translate(texts)

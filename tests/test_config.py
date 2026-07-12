@@ -33,9 +33,7 @@ class TestFindFile:
 
 class TestLoadToml:
     def test_loads_valid_toml(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write('[characters]\nJohn = "anh"\n')
             f.flush()
             data = _load_toml(Path(f.name))
@@ -43,9 +41,7 @@ class TestLoadToml:
             Path(f.name).unlink()
 
     def test_returns_empty_on_invalid(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write("not valid toml[[[")
             f.flush()
             data = _load_toml(Path(f.name))
@@ -55,9 +51,7 @@ class TestLoadToml:
 
 class TestLoadGlossary:
     def test_simple_character(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write('[characters]\nJohn = "anh"\n')
             f.flush()
             glossary = load_glossary(Path(f.name))
@@ -74,9 +68,7 @@ form = "anh"
 narrator = "anh ấy"
 note = "ông chủ, ~40 tuổi"
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml)
             f.flush()
             glossary = load_glossary(Path(f.name))
@@ -89,9 +81,7 @@ note = "ông chủ, ~40 tuổi"
             Path(f.name).unlink()
 
     def test_terms(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write('[terms]\n"machine learning" = "học máy"\n')
             f.flush()
             glossary = load_glossary(Path(f.name))
@@ -100,9 +90,7 @@ note = "ông chủ, ~40 tuổi"
             Path(f.name).unlink()
 
     def test_returns_none_for_empty(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write("[characters]\n")
             f.flush()
             glossary = load_glossary(Path(f.name))
@@ -129,9 +117,7 @@ class TestBuildGlossaryPrompt:
     def test_characters_in_prompt(self):
         glossary = Glossary(
             characters={
-                "John": CharacterEntry(
-                    self_ref="tôi", address="anh", narrator="anh ấy"
-                )
+                "John": CharacterEntry(self_ref="tôi", address="anh", narrator="anh ấy")
             }
         )
         prompt = build_glossary_prompt(glossary)

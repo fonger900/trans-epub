@@ -127,9 +127,9 @@ class TestTranslateNav:
     def _make_nav_item(self, name="nav.xhtml", content=None):
         if content is None:
             content = (
-                b'<html><body><nav><ol>'
+                b"<html><body><nav><ol>"
                 b'<li><a href="ch1.xhtml">Chapter 1</a></li>'
-                b'</ol></nav></body></html>'
+                b"</ol></nav></body></html>"
             )
         item = MagicMock(spec=epub.EpubNav)
         item.get_name.return_value = name

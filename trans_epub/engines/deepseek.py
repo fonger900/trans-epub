@@ -33,7 +33,9 @@ def deepseek_translate(
 
     temperature = DEFAULT_DEEPSEEK_CREATIVITY if creativity is None else creativity
 
-    prompt = build_prompt(glossary, extra_prompt) + json.dumps({"texts": texts}, ensure_ascii=False)
+    prompt = build_prompt(glossary, extra_prompt) + json.dumps(
+        {"texts": texts}, ensure_ascii=False
+    )
 
     def do_request():
         return http_session.post(

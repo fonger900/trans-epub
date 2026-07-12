@@ -10,8 +10,10 @@ from trans_epub.engines import ENGINES, EngineConfig
 @pytest.fixture
 def mock_translate():
     """Default mock translate: prefix each text with 'VI: '."""
+
     def translate(texts, **_kwargs):
         return [f"VI: {t}" for t in texts]
+
     return translate
 
 

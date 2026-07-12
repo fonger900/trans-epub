@@ -1,6 +1,5 @@
 """Tests for the CLI module."""
 
-
 import pytest
 
 from trans_epub.cli import __version__, main, resolve_engine

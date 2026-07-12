@@ -97,14 +97,18 @@ class TestTranslateHtml:
         result_str = result.decode("utf-8")
         assert "<em>world</em>" in result_str
 
-    def test_literal_angle_bracket_in_translation(self, mock_engines, mock_engine_config):
+    def test_literal_angle_bracket_in_translation(
+        self, mock_engines, mock_engine_config
+    ):
         """Literal '<' in translated text (from LLM) should not break XML parsing.
 
         Source uses &lt; which BeautifulSoup decodes to '<'. The mock engine
         returns a translation containing '<' — the reassembly must escape it
         so it survives XML encoding as &lt;.
         """
-        html = b"<html><body><p>Technical note: x &lt; y is always true</p></body></html>"
+        html = (
+            b"<html><body><p>Technical note: x &lt; y is always true</p></body></html>"
+        )
 
         def tricky_translate(texts, **_kwargs):
             return [t.replace("x < y is always true", "x < y luôn đúng") for t in texts]
@@ -150,7 +154,9 @@ class TestTranslateHtmlFallback:
         assert b"VI: A" in result
         assert b"VI: B" in result
 
-    def test_single_element_fallback_returns_original(self, mock_engines, mock_engine_config):
+    def test_single_element_fallback_returns_original(
+        self, mock_engines, mock_engine_config
+    ):
         """When a single-element batch fails, return original text."""
         html = b"<p>Keep me</p>"
 

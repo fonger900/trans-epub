@@ -98,6 +98,7 @@ def translate_epub(
     # Reset Gemini token counters for this run
     if engine == "gemini":
         from .engines.gemini import reset_gemini_usage
+
         reset_gemini_usage()
 
     # Load glossary if provided or auto-detect
@@ -307,7 +308,12 @@ def translate_epub(
 
     with progress:
         translate_toc_and_nav(
-            book, engine, cache, creativity=creativity, glossary=glossary, extra_prompt=extra_prompt
+            book,
+            engine,
+            cache,
+            creativity=creativity,
+            glossary=glossary,
+            extra_prompt=extra_prompt,
         )
         cache_path.write_text(json.dumps(cache, ensure_ascii=False))
         progress.update(toc_task, advance=1, visible=False)

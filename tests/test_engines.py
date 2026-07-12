@@ -66,23 +66,20 @@ class TestTranslateTexts:
 
 class TestExtractTranslations:
     def test_basic(self):
-        assert extract_translations(
-            '{"translations": ["Xin chào", "Thế giới"]}'
-        ) == ["Xin chào", "Thế giới"]
+        assert extract_translations('{"translations": ["Xin chào", "Thế giới"]}') == [
+            "Xin chào",
+            "Thế giới",
+        ]
 
     def test_with_markdown_fence(self):
-        result = extract_translations(
-            '```json\n{"translations": ["Xin chào"]}\n```'
-        )
+        result = extract_translations('```json\n{"translations": ["Xin chào"]}\n```')
         assert result == ["Xin chào"]
 
     def test_list_format(self):
         assert extract_translations('["A", "B"]') == ["A", "B"]
 
     def test_nested_format(self):
-        result = extract_translations(
-            '{"result": {"translations": ["A", "B"]}}'
-        )
+        result = extract_translations('{"result": {"translations": ["A", "B"]}}')
         assert result == ["A", "B"]
 
     def test_invalid_raises(self):
