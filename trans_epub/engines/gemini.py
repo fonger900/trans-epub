@@ -24,8 +24,8 @@ from .base import (
 if TYPE_CHECKING:
     from ..config import Glossary
 
-# _DEFAULT_MODEL = "gemini-3.1-flash-lite"
-_DEFAULT_MODEL = "gemini-3.1-pro-preview"
+_DEFAULT_MODEL = "gemini-3.1-flash-lite"
+#_DEFAULT_MODEL = "gemini-3.1-pro-preview"
 
 # Permit all safety categories so Gemini doesn't block literary content
 _SAFETY_SETTINGS = [
