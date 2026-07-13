@@ -90,8 +90,12 @@ def _count_chars(
 
 
 def _print_book_info(
-    total: int, engine: str, threads: int,
-    total_chars: int, cached_chars: int, pending_chars: int,
+    total: int,
+    engine: str,
+    threads: int,
+    total_chars: int,
+    cached_chars: int,
+    pending_chars: int,
 ) -> None:
     """Print book summary and cost estimate."""
     console.print(
@@ -152,11 +156,21 @@ def _setup_progress(
     worker_tasks = [
         progress.add_task("", total=1, visible=False) for _ in range(threads)
     ]
-    return progress, toc_task, overall_task, worker_tasks, threading.Lock(), list(range(threads))
+    return (
+        progress,
+        toc_task,
+        overall_task,
+        worker_tasks,
+        threading.Lock(),
+        list(range(threads)),
+    )
 
 
 def _print_results(
-    output_path: str, engine: str, total_chars: int, cached_chars: int,
+    output_path: str,
+    engine: str,
+    total_chars: int,
+    cached_chars: int,
     failed: list[tuple[str, str]],
 ) -> None:
     """Print final summary, cost, and failure details."""
@@ -266,7 +280,9 @@ def translate_epub(
         if not only_chapters or i in only_chapters
     ]
     total_chars, cached_chars, pending_chars = _count_chars(work_items, cache, fresh)
-    _print_book_info(len(items), engine, threads, total_chars, cached_chars, pending_chars)
+    _print_book_info(
+        len(items), engine, threads, total_chars, cached_chars, pending_chars
+    )
 
     if not _confirm_proceed(cached_chars, fresh):
         return
@@ -306,22 +322,30 @@ def translate_epub(
         progress.update(
             worker_tasks[wid],
             description=f"  [cyan]{fname}[/cyan]",
-            completed=0, total=1, visible=True,
+            completed=0,
+            total=1,
+            visible=True,
         )
 
         def on_progress(batch_num: int, total_batches: int, batch_chars: int) -> None:
             nonlocal total_chars
             progress.update(
-                worker_tasks[wid], description=f"  [cyan]{fname}[/cyan]",
-                completed=batch_num, total=total_batches,
+                worker_tasks[wid],
+                description=f"  [cyan]{fname}[/cyan]",
+                completed=batch_num,
+                total=total_batches,
             )
             with total_chars_lock:
                 total_chars += batch_chars
 
         try:
             translated, _ = translate_html(
-                item.get_content(), engine, creativity=creativity,
-                progress_cb=on_progress, glossary=glossary, extra_prompt=extra_prompt,
+                item.get_content(),
+                engine,
+                creativity=creativity,
+                progress_cb=on_progress,
+                glossary=glossary,
+                extra_prompt=extra_prompt,
             )
         except Exception as e:
             progress.update(worker_tasks[wid], visible=False)
@@ -348,8 +372,12 @@ def translate_epub(
     try:
         with progress:
             translate_toc_and_nav(
-                book, engine, cache, creativity=creativity,
-                glossary=glossary, extra_prompt=extra_prompt,
+                book,
+                engine,
+                cache,
+                creativity=creativity,
+                glossary=glossary,
+                extra_prompt=extra_prompt,
             )
             cache_path.write_text(json.dumps(cache, ensure_ascii=False))
             progress.update(toc_task, advance=1, visible=False)
