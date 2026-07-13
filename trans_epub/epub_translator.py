@@ -24,7 +24,7 @@ from rich.progress import (
 
 from .config import Glossary, load_glossary
 from .html_translator import count_translatable_chars, translate_html
-from .toc import translate_toc_and_nav
+from .toc import rebuild_toc_links, translate_toc_and_nav
 
 console = Console()
 
@@ -354,6 +354,7 @@ def translate_epub(
         console.print("[dim]Saving partial progress...[/dim]")
 
     # Always write — preserve whatever was translated even on partial failure
+    rebuild_toc_links(book)
     epub.write_epub(output_path, book)
     _repack_epub(output_path)
     cache_path.write_text(json.dumps(cache, ensure_ascii=False))
