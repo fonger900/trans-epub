@@ -3,6 +3,7 @@
 Set GEMINI_API_KEY in your .env file.
 Optionally set GEMINI_MODEL to override the model name.
 Optionally set GEMINI_MAX_TOKENS to override max output tokens.
+Optionally set GEMINI_TIMEOUT to override request timeout in seconds (default: 300).
 
 Token usage tracking and cost estimation are built in — see _GEMINI_PRICING
 for per-model rates (update when Google changes pricing).
@@ -153,7 +154,7 @@ def gemini_translate(
                 "generationConfig": generation_config,
                 "safetySettings": _SAFETY_SETTINGS,
             },
-            timeout=300,
+            timeout=int(os.environ.get("GEMINI_TIMEOUT", "300")),
         )
 
     def parse(resp):
