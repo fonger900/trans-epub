@@ -135,8 +135,8 @@ def _confirm_proceed(cached_chars: int, fresh: bool) -> bool:
         if choice and choice not in ("y", "yes"):
             console.print("[yellow]Aborted[/yellow]")
             return False
-    except EOFError:
-        console.print("[yellow]Aborted[/yellow]")
+    except (EOFError, KeyboardInterrupt):
+        console.print("\n[yellow]Aborted[/yellow]")
         return False
     return True
 
