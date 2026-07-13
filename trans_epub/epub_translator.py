@@ -304,48 +304,59 @@ def translate_epub(
     # ── Execute ────────────────────────────────────────────────────────────────
     failed: list[tuple[str, str]] = []
 
-    with progress:
-        translate_toc_and_nav(
-            book,
-            engine,
-            cache,
-            creativity=creativity,
-            glossary=glossary,
-            extra_prompt=extra_prompt,
-        )
-        cache_path.write_text(json.dumps(cache, ensure_ascii=False))
-        progress.update(toc_task, advance=1, visible=False)
+    try:
+        with progress:
+            translate_toc_and_nav(
+                book,
+                engine,
+                cache,
+                creativity=creativity,
+                glossary=glossary,
+                extra_prompt=extra_prompt,
+            )
+            cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+            progress.update(toc_task, advance=1, visible=False)
 
-        if threads > 1:
-            with ThreadPoolExecutor(max_workers=threads) as executor:
-                futures = {
-                    executor.submit(process_chapter, i, item): item.get_name()
-                    for i, item in work_items
-                }
+            if threads > 1:
+                with ThreadPoolExecutor(max_workers=threads) as executor:
+                    futures = {
+                        executor.submit(process_chapter, i, item): item.get_name()
+                        for i, item in work_items
+                    }
+                    for i, item in enumerate(items, 1):
+                        if only_chapters and i not in only_chapters:
+                            restore_skipped(i, item)
+
+                    for future in futures:
+                        try:
+                            future.result()
+                        except KeyboardInterrupt:
+                            raise
+                        except Exception as e:
+                            failed.append((futures[future], str(e)))
+            else:
+                for i, item in work_items:
+                    try:
+                        process_chapter(i, item)
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as e:
+                        failed.append((item.get_name(), str(e)))
                 for i, item in enumerate(items, 1):
                     if only_chapters and i not in only_chapters:
                         restore_skipped(i, item)
 
-                for future in futures:
-                    try:
-                        future.result()
-                    except Exception as e:
-                        failed.append((futures[future], str(e)))
-        else:
-            for i, item in work_items:
-                try:
-                    process_chapter(i, item)
-                except Exception as e:
-                    failed.append((item.get_name(), str(e)))
-            for i, item in enumerate(items, 1):
-                if only_chapters and i not in only_chapters:
-                    restore_skipped(i, item)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled by user[/yellow]")
+        # Cancel pending futures to stop in-progress HTTP requests
+        if threads > 1:
+            executor.shutdown(wait=False, cancel_futures=True)
+        console.print("[dim]Saving partial progress...[/dim]")
 
     # Always write — preserve whatever was translated even on partial failure
     epub.write_epub(output_path, book)
     _repack_epub(output_path)
-    # Cache persist across runs for incremental builds and resume support
-    # Delete only explicitly or if caller chooses
+    cache_path.write_text(json.dumps(cache, ensure_ascii=False))
 
     if failed:
         console.print(
