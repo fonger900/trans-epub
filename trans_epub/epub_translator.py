@@ -72,53 +72,61 @@ def get_spine_items(book: epub.EpubBook) -> list:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _count_chars(
-    work_items: list[tuple[int, object]],
-    cache: dict[str, str],
-    fresh: bool,
-) -> tuple[int, int, list[int]]:
-    """Count total, cached, and return a list of pending character counts per chapter."""
-    total = cached = 0
-    pending_chapters = []
-    for _i, item in work_items:
-        chars = count_translatable_chars(item.get_content())
-        total += chars
-        if item.get_name() in cache and not fresh:
-            cached += chars
-        else:
-            pending_chapters.append(chars)
-    return total, cached, pending_chapters
+def _scan_chapters(
+    work_items: list[tuple[int, object]], cache: dict[str, str], fresh: bool
+) -> list[dict]:
+    """Scan chapters to pre-calculate metrics and cache statuses.
+
+    Prevents redundant HTML parsing and lock-heavy cache checks during execution[cite: 3].
+    """
+    jobs = []
+    for i, item in work_items:
+        name = item.get_name()
+        char_count = count_translatable_chars(item.get_content())
+        is_cached = name in cache and not fresh
+
+        jobs.append({
+            "index": i,
+            "item": item,
+            "name": name,
+            "char_count": char_count,
+            "is_cached": is_cached,
+            "cached_content": cache.get(name) if is_cached else None,
+        })
+    return jobs
 
 
 def _print_book_info(
-    total: int,
+    total_items: int,
     engine: str,
     threads: int,
-    total_chars: int,
-    cached_chars: int,
-    pending_chars: list[int],  # 1. Update type hint to list[int]
+    jobs: list[dict],
     glossary: Glossary | None = None,
     extra_prompt: str = "",
 ) -> None:
-    """Print book summary and cost estimate."""
+    """Print book summary metrics and accurate cost layout[cite: 2]."""
+    total_chars = sum(j["char_count"] for j in jobs)
+    cached_chars = sum(j["char_count"] for j in jobs if j["is_cached"])
+    pending_chapters = [j["char_count"] for j in jobs if not j["is_cached"]]
+    total_pending = sum(pending_chapters)
+
     console.print(
-        f"[bold]Book:[/bold] {total} items  "
+        f"[bold]Book:[/bold] {total_items} items  "
         f"[bold]Engine:[/bold] {engine}  "
         f"[bold]Threads:[/bold] {threads}"
     )
-    # 2. Use sum() here to display the total pending characters
     console.print(
         f"[bold]Total:[/bold] {total_chars:,} chars  "
         f"[bold]Cached:[/bold] {cached_chars:,} chars  "
-        f"[bold]Pending:[/bold] {sum(pending_chars):,} chars"
+        f"[bold]Pending:[/bold] {total_pending:,} chars"
     )
-    # 3. Use sum() here as well to check if there is work to do
-    if engine == "gemini" and sum(pending_chars) > 0:
+
+    if engine == "gemini" and total_pending > 0:
         from .engines.base import build_prompt
         from .engines.gemini import estimate_gemini_cost
 
         prompt_chars = len(build_prompt(glossary, extra_prompt))
-        est = estimate_gemini_cost(pending_chars, prompt_chars=prompt_chars)
+        est = estimate_gemini_cost(pending_chapters, prompt_chars=prompt_chars)
         if est > 0:
             console.print(f"[bold]Est. cost:[/bold] ${est:.4f}")
         else:
@@ -141,7 +149,6 @@ def _confirm_proceed(cached_chars: int, fresh: bool) -> bool:
         console.print("\n[yellow]Aborted[/yellow]")
         return False
     return True
-
 
 def _setup_progress(
     threads: int,
@@ -179,7 +186,7 @@ def _print_results(
     cached_chars: int,
     failed: list[tuple[str, str]],
 ) -> None:
-    """Print final summary, cost, and failure details."""
+    """Print final summary, cost, and failure details[cite: 3]."""
     if engine == "gemini":
         from .engines.gemini import actual_gemini_cost, get_gemini_usage
 
@@ -248,7 +255,6 @@ def translate_epub(
 
     if engine == "gemini":
         from .engines.gemini import reset_gemini_usage
-
         reset_gemini_usage()
 
     glossary: Glossary | None = None
@@ -285,16 +291,18 @@ def translate_epub(
         for i, item in enumerate(items, 1)
         if not only_chapters or i in only_chapters
     ]
-    total_chars, cached_chars, pending_chars = _count_chars(work_items, cache, fresh)
+
+    # Compile jobs in a single pass
+    jobs = _scan_chapters(work_items, cache, fresh)
     _print_book_info(
-        len(items), engine, threads, total_chars, cached_chars, pending_chars,
-        glossary=glossary, extra_prompt=extra_prompt,
+        len(items), engine, threads, jobs, glossary=glossary, extra_prompt=extra_prompt
     )
 
+    cached_chars = sum(j["char_count"] for j in jobs if j["is_cached"])
     if not _confirm_proceed(cached_chars, fresh):
         return
 
-    # Reset counters (pre-scan values were for display only)
+    # Reset structural tracking counters
     total_chars = 0
     cached_chars = 0
     total_chars_lock = threading.Lock()
@@ -303,23 +311,19 @@ def translate_epub(
     progress, toc_task, overall_task, worker_tasks, worker_lock, free_workers = (
         _setup_progress(threads)
     )
-    progress.update(overall_task, total=len(work_items))
+    progress.update(overall_task, total=len(jobs))
 
-    def process_chapter(i: int, item) -> None:
+    def process_chapter(job: dict) -> None:
         nonlocal total_chars, cached_chars
-        name = item.get_name()
+        item = job["item"]
+        name = job["name"]
 
-        with cache_lock:
-            in_cache = name in cache
-            cached_content = cache.get(name) if in_cache else None
-
-        if in_cache:
-            assert cached_content is not None
-            item.set_content(cached_content.encode("utf-8"))
+        if job["is_cached"]:
+            item.set_content(job["cached_content"].encode("utf-8"))
             progress.update(overall_task, advance=1)
             with total_chars_lock:
-                total_chars += count_translatable_chars(item.get_content())
-                cached_chars += count_translatable_chars(item.get_content())
+                total_chars += job["char_count"]
+                cached_chars += job["char_count"]
             return
 
         with worker_lock:
@@ -392,8 +396,8 @@ def translate_epub(
             if threads > 1:
                 with ThreadPoolExecutor(max_workers=threads) as executor:
                     futures = {
-                        executor.submit(process_chapter, i, item): item.get_name()
-                        for i, item in work_items
+                        executor.submit(process_chapter, job): job["name"]
+                        for job in jobs
                     }
                     for i, item in enumerate(items, 1):
                         if only_chapters and i not in only_chapters:
@@ -406,13 +410,13 @@ def translate_epub(
                         except Exception as e:
                             failed.append((futures[future], str(e)))
             else:
-                for i, item in work_items:
+                for job in jobs:
                     try:
-                        process_chapter(i, item)
+                        process_chapter(job)
                     except KeyboardInterrupt:
                         raise
                     except Exception as e:
-                        failed.append((item.get_name(), str(e)))
+                        failed.append((job["name"], str(e)))
                 for i, item in enumerate(items, 1):
                     if only_chapters and i not in only_chapters:
                         restore_skipped(i, item)

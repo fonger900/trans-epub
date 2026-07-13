@@ -90,27 +90,33 @@ def _resolve_pricing(model: str) -> tuple[float, float]:
 
 
 def estimate_gemini_cost(
-    chapter_chars: list[int], model: str | None = None, prompt_chars: int = 0,
+    chars: int | list[int], model: str | None = None, prompt_chars: int = 0
 ) -> float:
-    """Estimate USD cost for translating chapters of English text into Vietnamese."""
+    """Estimate USD cost for translating English text to Vietnamese.
+
+    Supports either a total character count or a list of per-chapter character counts
+    to accurately capture repeated system prompt overhead per batch execution[cite: 1].
+    """
     model = model or os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
     input_price, output_price = _resolve_pricing(model)
 
+    # Normalize input to a list of sizes for unified batch math
+    chapters = [chars] if isinstance(chars, int) else chars
+
+    batch_size = 20_000
     total_input_tokens = 0.0
     total_output_tokens = 0.0
-    batch_size = 20_000
 
-    for chars in chapter_chars:
-        if chars == 0:
+    for c_chars in chapters:
+        if c_chars == 0:
             continue
-        # Calculate batches required *for this specific chapter*
-        num_batches = max(1, (chars + batch_size - 1) // batch_size)
+        num_batches = max(1, (c_chars + batch_size - 1) // batch_size)
 
-        # English input tokens for this chapter + repeated prompt overhead per batch
-        total_input_tokens += (chars / 3.0) + (prompt_chars / 3.0) * num_batches
+        # Input: ~3 English characters per token + system prompt overhead per batch[cite: 1]
+        total_input_tokens += (c_chars / 3.0) + (prompt_chars / 3.0) * num_batches
 
-        # Vietnamese output tokens (adjusted to ~1.8 chars per token due to diacritics)
-        total_output_tokens += (chars / 1.8)
+        # Output: ~1.8 characters per token (Vietnamese diacritics compress less efficiently)
+        total_output_tokens += c_chars / 1.8
 
     return (total_input_tokens / 1_000_000) * input_price + (
         total_output_tokens / 1_000_000
