@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .config import _find_file
 from .epub_translator import translate_epub
 
 try:
@@ -18,30 +19,27 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
+_ENV_KEYS = [
+    ("AZURE_TRANSLATOR_KEY", "azure"),
+    ("GEMINI_API_KEY", "gemini"),
+    ("DEEPSEEK_API_KEY", "deepseek"),
+    ("DASHSCOPE_API_KEY", "alibaba"),
+    ("GOOGLE_TRANSLATE_API_KEY", "google"),
+    ("DEEPL_API_KEY", "deepl"),
+]
+
 
 def resolve_engine(engine: str) -> str:
     """Resolve 'auto' to the first engine whose API key is present."""
     if engine != "auto":
         return engine
 
-    # Check environment variables
-    if os.environ.get("AZURE_TRANSLATOR_KEY"):
-        return "azure"
-    if os.environ.get("GEMINI_API_KEY"):
-        return "gemini"
-    if os.environ.get("DEEPSEEK_API_KEY"):
-        return "deepseek"
-    if os.environ.get("DASHSCOPE_API_KEY"):
-        return "alibaba"
-    if os.environ.get("GOOGLE_TRANSLATE_API_KEY"):
-        return "google"
-    if os.environ.get("DEEPL_API_KEY"):
-        return "deepl"
+    for env_key, name in _ENV_KEYS:
+        if os.environ.get(env_key):
+            return name
 
-    raise RuntimeError(
-        "No translation API key found. "
-        "Set AZURE_TRANSLATOR_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, or DASHSCOPE_API_KEY."
-    )
+    all_keys = ", ".join(k for k, _ in _ENV_KEYS)
+    raise RuntimeError(f"No translation API key found. Set one of: {all_keys}.")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -111,16 +109,11 @@ def main(argv: list[str] | None = None) -> int:
 
     engine = resolve_engine(args.engine)
 
-    # Resolve extra prompt: explicit --prompt flag or auto-detect .trans-epub/prompt.txt
+    # Resolve extra prompt: explicit --prompt flag or auto-detect
     extra_prompt = ""
     prompt_file: Path | None = args.prompt
     if not prompt_file:
-        # Auto-detect in project-local then user-global config dirs
-        for base in [Path(".trans-epub"), Path.home() / ".config" / "trans-epub"]:
-            candidate = base / "prompt.txt"
-            if candidate.exists():
-                prompt_file = candidate
-                break
+        prompt_file = _find_file("prompt.txt")
     if prompt_file and prompt_file.exists():
         extra_prompt = prompt_file.read_text(encoding="utf-8").strip()
 

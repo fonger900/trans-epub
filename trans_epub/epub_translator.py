@@ -1,5 +1,7 @@
 """Top-level EPUB translation orchestration."""
 
+from __future__ import annotations
+
 import io
 import json
 import os
@@ -40,19 +42,13 @@ def _short_name(name: str) -> str:
 
 
 def _repack_epub(path: str) -> None:
-    """Rewrite the epub zip in-place to fix CRC mismatches from ebooklib.
-
-    ebooklib sometimes writes zip entries with incorrect CRC-32 values.
-    Re-reading and rewriting every entry through Python's zipfile fixes it.
-    The mimetype entry must be first and uncompressed per the EPUB spec.
-    """
+    """Rewrite the epub zip in-place to fix CRC mismatches from ebooklib."""
     original = Path(path).read_bytes()
     buf = io.BytesIO()
     with (
         zipfile.ZipFile(io.BytesIO(original), "r") as src,
         zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as dst,
     ):
-        # mimetype must be first and stored uncompressed
         if "mimetype" in src.namelist():
             dst.writestr(
                 zipfile.ZipInfo("mimetype"),
@@ -73,85 +69,31 @@ def get_spine_items(book: epub.EpubBook) -> list:
     return [by_id[sid] for sid in spine_ids if sid in by_id]
 
 
-def translate_epub(
-    input_path: str,
-    output_path: str,
-    engine: str,
-    only_chapters: set[int] | None = None,
-    list_only: bool = False,
-    threads: int = 4,
-    creativity: float | None = None,
-    glossary_path: str | None = None,
-    fresh: bool = False,
-    extra_prompt: str = "",
-) -> None:
-    """Translate *input_path* from English to Vietnamese and write *output_path*.
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-    If *fresh* is True, ignore existing cache and translate all items.
-    *extra_prompt* appends additional book-specific instructions to the LLM prompt.
-    """
-    cache_path = Path(output_path + ".cache.json")
-    cache: dict[str, str] = (
-        json.loads(cache_path.read_text()) if cache_path.exists() and not fresh else {}
-    )
 
-    # Reset Gemini token counters for this run
-    if engine == "gemini":
-        from .engines.gemini import reset_gemini_usage
-
-        reset_gemini_usage()
-
-    # Load glossary if provided or auto-detect
-    glossary: Glossary | None = None
-    if glossary_path:
-        glossary_file = Path(glossary_path)
-        if not glossary_file.exists():
-            console.print(f"[red]Glossary not found:[/red] {glossary_path}")
-            return
-        glossary = load_glossary(glossary_file)
-    else:
-        glossary = load_glossary()  # auto-detect
-
-    if glossary:
-        console.print(
-            f"[dim]Glossary:[/dim] {len(glossary.characters)} characters, "
-            f"{len(glossary.terms)} terms"
-        )
-
-    book = epub.read_epub(input_path)
-
-    # Ensure there is an EpubNav item for EPUB 3 compatibility (fixes ebooklib writer bug)
-    if not any(isinstance(item, epub.EpubNav) for item in book.items):
-        book.add_item(epub.EpubNav())
-
-    items = get_spine_items(book)
-    total = len(items)
-
-    if list_only:
-        console.print(f"[bold]{'No.':<5}[/bold] File")
-        console.print("-" * 60)
-        for i, item in enumerate(items, 1):
-            console.print(f"{i:<5} {item.get_name()}")
-        return
-
-    # ── Count translatable chars before translation ────────────────────────────
-    work_items = [
-        (i, item)
-        for i, item in enumerate(items, 1)
-        if not only_chapters or i in only_chapters
-    ]
-    total_chars = 0
-    cached_chars = 0
-    pending_chars = 0
-    for i, item in work_items:
-        name = item.get_name()
+def _count_chars(
+    work_items: list[tuple[int, object]],
+    cache: dict[str, str],
+    fresh: bool,
+) -> tuple[int, int, int]:
+    """Count total, cached, and pending translatable characters."""
+    total = cached = pending = 0
+    for _i, item in work_items:
         chars = count_translatable_chars(item.get_content())
-        total_chars += chars
-        if name in cache and not fresh:
-            cached_chars += chars
+        total += chars
+        if item.get_name() in cache and not fresh:
+            cached += chars
         else:
-            pending_chars += chars
+            pending += chars
+    return total, cached, pending
 
+
+def _print_book_info(
+    total: int, engine: str, threads: int,
+    total_chars: int, cached_chars: int, pending_chars: int,
+) -> None:
+    """Print book summary and cost estimate."""
     console.print(
         f"[bold]Book:[/bold] {total} items  "
         f"[bold]Engine:[/bold] {engine}  "
@@ -162,8 +104,6 @@ def translate_epub(
         f"[bold]Cached:[/bold] {cached_chars:,} chars  "
         f"[bold]Pending:[/bold] {pending_chars:,} chars"
     )
-
-    # ── Cost estimate (Gemini only) ──────────────────────────────────────────
     if engine == "gemini" and pending_chars > 0:
         from .engines.gemini import estimate_gemini_cost
 
@@ -173,31 +113,30 @@ def translate_epub(
         else:
             console.print("[bold]Est. cost:[/bold] [green]free[/green]")
 
-    # ── Prompt y/n to proceed (only in interactive mode) ──────────────────────
-    if sys.stdin.isatty():
-        if not fresh:
-            console.print(
-                f"\n[bold yellow]Use cache for {cached_chars:,} chars?[/bold yellow]"
-            )
 
-        try:
-            choice = input("\nProceed? [Y/n] ").strip().lower()
-            if choice and choice != "y" and choice != "yes":
-                console.print("[yellow]Aborted[/yellow]")
-                return
-        except EOFError:
+def _confirm_proceed(cached_chars: int, fresh: bool) -> bool:
+    """Prompt user to confirm. Returns True to proceed, False to abort."""
+    if not sys.stdin.isatty():
+        return True
+    if not fresh:
+        console.print(
+            f"\n[bold yellow]Use cache for {cached_chars:,} chars?[/bold yellow]"
+        )
+    try:
+        choice = input("\nProceed? [Y/n] ").strip().lower()
+        if choice and choice not in ("y", "yes"):
             console.print("[yellow]Aborted[/yellow]")
-            return
+            return False
+    except EOFError:
+        console.print("[yellow]Aborted[/yellow]")
+        return False
+    return True
 
-    # Reset runtime counters (pre-scan values were for display only)
-    total_chars = 0
-    cached_chars = 0
-    total_chars_lock = threading.Lock()
-    cache_lock = threading.Lock()
 
-    num_work = len(work_items)
-
-    # ── Progress UI (shown immediately so user sees activity during TOC phase) ─
+def _setup_progress(
+    threads: int,
+) -> tuple[Progress, TaskID, TaskID, list[TaskID], threading.Lock, list[int]]:
+    """Create progress bar and worker tracking."""
     progress = Progress(
         SpinnerColumn(),
         TextColumn("{task.description}"),
@@ -208,170 +147,19 @@ def translate_epub(
         console=console,
         expand=True,
     )
-
-    toc_task: TaskID = progress.add_task("[yellow]Translating TOC", total=1)
-    overall_task: TaskID = progress.add_task("[bold green]Overall", total=num_work)
-
-    # Per-worker rows — one per thread, shown only while active
-    worker_tasks: list[TaskID] = [
+    toc_task = progress.add_task("[yellow]Translating TOC", total=1)
+    overall_task = progress.add_task("[bold green]Overall", total=0)
+    worker_tasks = [
         progress.add_task("", total=1, visible=False) for _ in range(threads)
     ]
-    worker_lock = threading.Lock()
-    free_workers: list[int] = list(range(threads))
+    return progress, toc_task, overall_task, worker_tasks, threading.Lock(), list(range(threads))
 
-    # ── Chapter processor ──────────────────────────────────────────────────────
-    def process_chapter(i: int, item) -> None:
-        nonlocal total_chars, cached_chars
-        name = item.get_name()
-        fname = _short_name(name)
 
-        with cache_lock:
-            in_cache = name in cache
-            cached_content = cache.get(name) if in_cache else None
-
-        if in_cache:
-            assert cached_content is not None  # Guaranteed by in_cache check
-            item.set_content(cached_content.encode("utf-8"))
-            progress.update(overall_task, advance=1)
-            chars = count_translatable_chars(item.get_content())
-            with total_chars_lock:
-                total_chars += chars
-                cached_chars += chars
-            return
-
-        # Claim a worker slot
-        with worker_lock:
-            wid = free_workers.pop(0)
-
-        progress.update(
-            worker_tasks[wid],
-            description=f"  [cyan]{fname}[/cyan]",
-            completed=0,
-            total=1,
-            visible=True,
-        )
-
-        # Overall bar advances 1 per completed chapter; per-chapter bar
-        # shows batch-level detail for in-progress work.
-
-        def on_progress(batch_num: int, total_batches: int, batch_chars: int) -> None:
-            nonlocal total_chars
-            progress.update(
-                worker_tasks[wid],
-                description=f"  [cyan]{fname}[/cyan]",
-                completed=batch_num,
-                total=total_batches,
-            )
-            with total_chars_lock:
-                total_chars += batch_chars
-
-        original = item.get_content()
-        try:
-            translated, chars = translate_html(
-                original,
-                engine,
-                creativity=creativity,
-                progress_cb=on_progress,
-                glossary=glossary,
-                extra_prompt=extra_prompt,
-            )
-        except Exception as e:
-            progress.update(worker_tasks[wid], visible=False)
-            with worker_lock:
-                free_workers.append(wid)
-            raise RuntimeError(f"{name}: {e}") from e
-
-        progress.update(overall_task, advance=1)
-
-        with cache_lock:
-            cache[name] = translated.decode("utf-8")
-            cache_path.write_text(json.dumps(cache, ensure_ascii=False))
-
-        item.set_content(translated)
-
-        progress.update(worker_tasks[wid], visible=False)
-        with worker_lock:
-            free_workers.append(wid)
-
-    # ── Load cached content for skipped items ──────────────────────────────────
-    def restore_skipped(i: int, item) -> None:
-        name = item.get_name()
-        with cache_lock:
-            cached_content = cache.get(name)
-        if cached_content:
-            item.set_content(cached_content.encode("utf-8"))
-
-    # ── Execute ────────────────────────────────────────────────────────────────
-    failed: list[tuple[str, str]] = []
-
-    try:
-        with progress:
-            translate_toc_and_nav(
-                book,
-                engine,
-                cache,
-                creativity=creativity,
-                glossary=glossary,
-                extra_prompt=extra_prompt,
-            )
-            cache_path.write_text(json.dumps(cache, ensure_ascii=False))
-            progress.update(toc_task, advance=1, visible=False)
-
-            if threads > 1:
-                with ThreadPoolExecutor(max_workers=threads) as executor:
-                    futures = {
-                        executor.submit(process_chapter, i, item): item.get_name()
-                        for i, item in work_items
-                    }
-                    for i, item in enumerate(items, 1):
-                        if only_chapters and i not in only_chapters:
-                            restore_skipped(i, item)
-
-                    for future in futures:
-                        try:
-                            future.result()
-                        except KeyboardInterrupt:
-                            raise
-                        except Exception as e:
-                            failed.append((futures[future], str(e)))
-            else:
-                for i, item in work_items:
-                    try:
-                        process_chapter(i, item)
-                    except KeyboardInterrupt:
-                        raise
-                    except Exception as e:
-                        failed.append((item.get_name(), str(e)))
-                for i, item in enumerate(items, 1):
-                    if only_chapters and i not in only_chapters:
-                        restore_skipped(i, item)
-
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Cancelled by user[/yellow]")
-        # Cancel pending futures to stop in-progress HTTP requests
-        if threads > 1:
-            executor.shutdown(wait=False, cancel_futures=True)
-        console.print("[dim]Saving partial progress...[/dim]")
-
-    # Always write — preserve whatever was translated even on partial failure
-    rebuild_toc_links(book)
-    epub.write_epub(output_path, book)
-    _repack_epub(output_path)
-    cache_path.write_text(json.dumps(cache, ensure_ascii=False))
-
-    if failed:
-        console.print(
-            f"\n[bold red]{len(failed)} item(s) failed[/bold red] (re-run to retry):"
-        )
-        for name, e in failed:
-            console.print(f"  [red]•[/red] {name}: {e}")
-        console.print(
-            "\n[dim]Tips:[/dim]"
-            " If quota exceeded: reduce creativity, increase delay between requests,"
-            " or check API quota limits."
-        )
-
-    # ── Cost summary (Gemini only) ───────────────────────────────────────────
+def _print_results(
+    output_path: str, engine: str, total_chars: int, cached_chars: int,
+    failed: list[tuple[str, str]],
+) -> None:
+    """Print final summary, cost, and failure details."""
     if engine == "gemini":
         from .engines.gemini import actual_gemini_cost, get_gemini_usage
 
@@ -396,7 +184,18 @@ def translate_epub(
         f"[dim]{cached_chars:,} cached[/dim])"
     )
 
-    # Tip for quota-related failures
+    if failed:
+        console.print(
+            f"\n[bold red]{len(failed)} item(s) failed[/bold red] (re-run to retry):"
+        )
+        for name, e in failed:
+            console.print(f"  [red]•[/red] {name}: {e}")
+        console.print(
+            "\n[dim]Tips:[/dim]"
+            " If quota exceeded: reduce creativity, increase delay between requests,"
+            " or check API quota limits."
+        )
+
     if any("quota" in e.lower() for _, e in failed) or any(
         "limit" in e.lower() for _, e in failed
     ):
@@ -404,3 +203,193 @@ def translate_epub(
             "\n[dim]Note: If API quota exceeded, try --fresh to start fresh or "
             "reduce --creativity to lower token usage."
         )
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+
+def translate_epub(
+    input_path: str,
+    output_path: str,
+    engine: str,
+    only_chapters: set[int] | None = None,
+    list_only: bool = False,
+    threads: int = 4,
+    creativity: float | None = None,
+    glossary_path: str | None = None,
+    fresh: bool = False,
+    extra_prompt: str = "",
+) -> None:
+    """Translate *input_path* from English to Vietnamese and write *output_path*."""
+    cache_path = Path(output_path + ".cache.json")
+    cache: dict[str, str] = (
+        json.loads(cache_path.read_text()) if cache_path.exists() and not fresh else {}
+    )
+
+    if engine == "gemini":
+        from .engines.gemini import reset_gemini_usage
+
+        reset_gemini_usage()
+
+    glossary: Glossary | None = None
+    if glossary_path:
+        glossary_file = Path(glossary_path)
+        if not glossary_file.exists():
+            console.print(f"[red]Glossary not found:[/red] {glossary_path}")
+            return
+        glossary = load_glossary(glossary_file)
+    else:
+        glossary = load_glossary()
+
+    if glossary:
+        console.print(
+            f"[dim]Glossary:[/dim] {len(glossary.characters)} characters, "
+            f"{len(glossary.terms)} terms"
+        )
+
+    book = epub.read_epub(input_path)
+    if not any(isinstance(item, epub.EpubNav) for item in book.items):
+        book.add_item(epub.EpubNav())
+
+    items = get_spine_items(book)
+
+    if list_only:
+        console.print(f"[bold]{'No.':<5}[/bold] File")
+        console.print("-" * 60)
+        for i, item in enumerate(items, 1):
+            console.print(f"{i:<5} {item.get_name()}")
+        return
+
+    work_items = [
+        (i, item)
+        for i, item in enumerate(items, 1)
+        if not only_chapters or i in only_chapters
+    ]
+    total_chars, cached_chars, pending_chars = _count_chars(work_items, cache, fresh)
+    _print_book_info(len(items), engine, threads, total_chars, cached_chars, pending_chars)
+
+    if not _confirm_proceed(cached_chars, fresh):
+        return
+
+    # Reset counters (pre-scan values were for display only)
+    total_chars = 0
+    cached_chars = 0
+    total_chars_lock = threading.Lock()
+    cache_lock = threading.Lock()
+
+    progress, toc_task, overall_task, worker_tasks, worker_lock, free_workers = (
+        _setup_progress(threads)
+    )
+    progress.update(overall_task, total=len(work_items))
+
+    def process_chapter(i: int, item) -> None:
+        nonlocal total_chars, cached_chars
+        name = item.get_name()
+
+        with cache_lock:
+            in_cache = name in cache
+            cached_content = cache.get(name) if in_cache else None
+
+        if in_cache:
+            assert cached_content is not None
+            item.set_content(cached_content.encode("utf-8"))
+            progress.update(overall_task, advance=1)
+            with total_chars_lock:
+                total_chars += count_translatable_chars(item.get_content())
+                cached_chars += count_translatable_chars(item.get_content())
+            return
+
+        with worker_lock:
+            wid = free_workers.pop(0)
+
+        fname = _short_name(name)
+        progress.update(
+            worker_tasks[wid],
+            description=f"  [cyan]{fname}[/cyan]",
+            completed=0, total=1, visible=True,
+        )
+
+        def on_progress(batch_num: int, total_batches: int, batch_chars: int) -> None:
+            nonlocal total_chars
+            progress.update(
+                worker_tasks[wid], description=f"  [cyan]{fname}[/cyan]",
+                completed=batch_num, total=total_batches,
+            )
+            with total_chars_lock:
+                total_chars += batch_chars
+
+        try:
+            translated, _ = translate_html(
+                item.get_content(), engine, creativity=creativity,
+                progress_cb=on_progress, glossary=glossary, extra_prompt=extra_prompt,
+            )
+        except Exception as e:
+            progress.update(worker_tasks[wid], visible=False)
+            with worker_lock:
+                free_workers.append(wid)
+            raise RuntimeError(f"{name}: {e}") from e
+
+        progress.update(overall_task, advance=1)
+        with cache_lock:
+            cache[name] = translated.decode("utf-8")
+            cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+        item.set_content(translated)
+        progress.update(worker_tasks[wid], visible=False)
+        with worker_lock:
+            free_workers.append(wid)
+
+    def restore_skipped(i: int, item) -> None:
+        with cache_lock:
+            cached_content = cache.get(item.get_name())
+        if cached_content:
+            item.set_content(cached_content.encode("utf-8"))
+
+    failed: list[tuple[str, str]] = []
+    try:
+        with progress:
+            translate_toc_and_nav(
+                book, engine, cache, creativity=creativity,
+                glossary=glossary, extra_prompt=extra_prompt,
+            )
+            cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+            progress.update(toc_task, advance=1, visible=False)
+
+            if threads > 1:
+                with ThreadPoolExecutor(max_workers=threads) as executor:
+                    futures = {
+                        executor.submit(process_chapter, i, item): item.get_name()
+                        for i, item in work_items
+                    }
+                    for i, item in enumerate(items, 1):
+                        if only_chapters and i not in only_chapters:
+                            restore_skipped(i, item)
+                    for future in futures:
+                        try:
+                            future.result()
+                        except KeyboardInterrupt:
+                            raise
+                        except Exception as e:
+                            failed.append((futures[future], str(e)))
+            else:
+                for i, item in work_items:
+                    try:
+                        process_chapter(i, item)
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as e:
+                        failed.append((item.get_name(), str(e)))
+                for i, item in enumerate(items, 1):
+                    if only_chapters and i not in only_chapters:
+                        restore_skipped(i, item)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled by user[/yellow]")
+        if threads > 1:
+            executor.shutdown(wait=False, cancel_futures=True)
+        console.print("[dim]Saving partial progress...[/dim]")
+
+    rebuild_toc_links(book)
+    epub.write_epub(output_path, book)
+    _repack_epub(output_path)
+    cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+
+    _print_results(output_path, engine, total_chars, cached_chars, failed)

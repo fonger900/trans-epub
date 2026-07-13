@@ -1,36 +1,17 @@
 """Azure Cognitive Translator engine."""
 
 import os
-import threading
-import time
 import uuid
 
 from .base import (
     ENGINES,
     EngineConfig,
+    RateLimiter,
     call_with_retry,
     http_session,
 )
 
-
-class _AzureRateLimiter:
-    """Thread-safe rate limiter: ensures at least *interval* seconds between calls."""
-
-    def __init__(self, interval: float):
-        self._interval = interval
-        self._lock = threading.Lock()
-        self._last = 0.0
-
-    def wait(self) -> None:
-        with self._lock:
-            now = time.monotonic()
-            wait = self._last + self._interval - now
-            if wait > 0:
-                time.sleep(wait)
-            self._last = time.monotonic()
-
-
-_azure_limiter = _AzureRateLimiter(6.0)  # Azure free tier: ~10 req/min
+_azure_limiter = RateLimiter(rpm=10)
 
 
 def azure_translate(texts: list[str], **_kwargs) -> list[str]:
