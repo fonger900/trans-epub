@@ -258,9 +258,7 @@ def translate_epub(
             nonlocal total_chars
             progress.update(
                 worker_tasks[wid],
-                description=(
-                    f"  [cyan]{fname}[/cyan] [dim]{batch_num}/{total_batches}[/dim]"
-                ),
+                description=f"  [cyan]{fname}[/cyan]",
                 completed=batch_num,
                 total=total_batches,
             )
