@@ -87,11 +87,21 @@ def _resolve_pricing(model: str) -> tuple[float, float]:
     return (1.25, 10.00)
 
 
-def estimate_gemini_cost(chars: int, model: str | None = None) -> float:
-    """Estimate USD cost for translating *chars* characters of English text."""
+def estimate_gemini_cost(
+    chars: int, model: str | None = None, prompt_chars: int = 0,
+) -> float:
+    """Estimate USD cost for translating *chars* characters of English text.
+
+    *prompt_chars* is the system prompt length (glossary + extra instructions)
+    which is sent with every batch and adds to input token count.
+    """
     model = model or os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
     input_price, output_price = _resolve_pricing(model)
-    input_tokens = chars / 3.0
+    # Each batch sends: system prompt + batch text. Estimate batch size as
+    # char_limit (~20k chars for Gemini). The prompt is repeated per batch.
+    batch_size = 20_000
+    num_batches = max(1, (chars + batch_size - 1) // batch_size)
+    input_tokens = (chars / 3.0) + (prompt_chars / 3.0) * num_batches
     output_tokens = chars / 2.5
     return (input_tokens / 1_000_000) * input_price + (
         output_tokens / 1_000_000

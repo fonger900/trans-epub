@@ -96,6 +96,8 @@ def _print_book_info(
     total_chars: int,
     cached_chars: int,
     pending_chars: int,
+    glossary: Glossary | None = None,
+    extra_prompt: str = "",
 ) -> None:
     """Print book summary and cost estimate."""
     console.print(
@@ -109,9 +111,11 @@ def _print_book_info(
         f"[bold]Pending:[/bold] {pending_chars:,} chars"
     )
     if engine == "gemini" and pending_chars > 0:
+        from .engines.base import build_prompt
         from .engines.gemini import estimate_gemini_cost
 
-        est = estimate_gemini_cost(pending_chars)
+        prompt_chars = len(build_prompt(glossary, extra_prompt))
+        est = estimate_gemini_cost(pending_chars, prompt_chars=prompt_chars)
         if est > 0:
             console.print(f"[bold]Est. cost:[/bold] ${est:.4f}")
         else:
@@ -281,7 +285,8 @@ def translate_epub(
     ]
     total_chars, cached_chars, pending_chars = _count_chars(work_items, cache, fresh)
     _print_book_info(
-        len(items), engine, threads, total_chars, cached_chars, pending_chars
+        len(items), engine, threads, total_chars, cached_chars, pending_chars,
+        glossary=glossary, extra_prompt=extra_prompt,
     )
 
     if not _confirm_proceed(cached_chars, fresh):
