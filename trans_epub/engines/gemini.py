@@ -90,23 +90,30 @@ def _resolve_pricing(model: str) -> tuple[float, float]:
 
 
 def estimate_gemini_cost(
-    chars: int, model: str | None = None, prompt_chars: int = 0,
+    chapter_chars: list[int], model: str | None = None, prompt_chars: int = 0,
 ) -> float:
-    """Estimate USD cost for translating *chars* characters of English text.
-
-    *prompt_chars* is the system prompt length (glossary + extra instructions)
-    which is sent with every batch and adds to input token count.
-    """
+    """Estimate USD cost for translating chapters of English text into Vietnamese."""
     model = model or os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
     input_price, output_price = _resolve_pricing(model)
-    # Each batch sends: system prompt + batch text. Estimate batch size as
-    # char_limit (~20k chars for Gemini). The prompt is repeated per batch.
+
+    total_input_tokens = 0.0
+    total_output_tokens = 0.0
     batch_size = 20_000
-    num_batches = max(1, (chars + batch_size - 1) // batch_size)
-    input_tokens = (chars / 3.0) + (prompt_chars / 3.0) * num_batches
-    output_tokens = chars / 2.5
-    return (input_tokens / 1_000_000) * input_price + (
-        output_tokens / 1_000_000
+
+    for chars in chapter_chars:
+        if chars == 0:
+            continue
+        # Calculate batches required *for this specific chapter*
+        num_batches = max(1, (chars + batch_size - 1) // batch_size)
+
+        # English input tokens for this chapter + repeated prompt overhead per batch
+        total_input_tokens += (chars / 3.0) + (prompt_chars / 3.0) * num_batches
+
+        # Vietnamese output tokens (adjusted to ~1.8 chars per token due to diacritics)
+        total_output_tokens += (chars / 1.8)
+
+    return (total_input_tokens / 1_000_000) * input_price + (
+        total_output_tokens / 1_000_000
     ) * output_price
 
 

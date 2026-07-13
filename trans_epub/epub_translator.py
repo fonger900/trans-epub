@@ -76,17 +76,18 @@ def _count_chars(
     work_items: list[tuple[int, object]],
     cache: dict[str, str],
     fresh: bool,
-) -> tuple[int, int, int]:
-    """Count total, cached, and pending translatable characters."""
-    total = cached = pending = 0
+) -> tuple[int, int, list[int]]:
+    """Count total, cached, and return a list of pending character counts per chapter."""
+    total = cached = 0
+    pending_chapters = []
     for _i, item in work_items:
         chars = count_translatable_chars(item.get_content())
         total += chars
         if item.get_name() in cache and not fresh:
             cached += chars
         else:
-            pending += chars
-    return total, cached, pending
+            pending_chapters.append(chars)
+    return total, cached, pending_chapters
 
 
 def _print_book_info(
@@ -95,7 +96,7 @@ def _print_book_info(
     threads: int,
     total_chars: int,
     cached_chars: int,
-    pending_chars: int,
+    pending_chars: list[int],  # 1. Update type hint to list[int]
     glossary: Glossary | None = None,
     extra_prompt: str = "",
 ) -> None:
@@ -105,12 +106,14 @@ def _print_book_info(
         f"[bold]Engine:[/bold] {engine}  "
         f"[bold]Threads:[/bold] {threads}"
     )
+    # 2. Use sum() here to display the total pending characters
     console.print(
         f"[bold]Total:[/bold] {total_chars:,} chars  "
         f"[bold]Cached:[/bold] {cached_chars:,} chars  "
-        f"[bold]Pending:[/bold] {pending_chars:,} chars"
+        f"[bold]Pending:[/bold] {sum(pending_chars):,} chars"
     )
-    if engine == "gemini" and pending_chars > 0:
+    # 3. Use sum() here as well to check if there is work to do
+    if engine == "gemini" and sum(pending_chars) > 0:
         from .engines.base import build_prompt
         from .engines.gemini import estimate_gemini_cost
 
@@ -120,7 +123,6 @@ def _print_book_info(
             console.print(f"[bold]Est. cost:[/bold] ${est:.4f}")
         else:
             console.print("[bold]Est. cost:[/bold] [green]free[/green]")
-
 
 def _confirm_proceed(cached_chars: int, fresh: bool) -> bool:
     """Prompt user to confirm. Returns True to proceed, False to abort."""
