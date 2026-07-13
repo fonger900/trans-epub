@@ -34,15 +34,17 @@ _DEFAULT_MODEL = "gemini-3.1-flash-lite"
 
 # ── Pricing (USD per 1M tokens) ────────────────────────────────────────────────
 _GEMINI_PRICING: dict[str, tuple[float, float]] = {
-    # Free tier
-    "gemini-3.1-flash-lite": (0, 0),
-    "gemini-2.5-flash-lite": (0, 0),
+    # Flash-Lite
+    "gemini-2.5-flash-lite": (0.10, 0.40),
+    "gemini-3.1-flash-lite": (0.25, 1.50),
     # Flash
     "gemini-2.5-flash": (0.15, 0.60),
     "gemini-3.1-flash": (0.15, 0.60),
+    "gemini-3-flash": (0.50, 3.00),
+    "gemini-3.5-flash": (1.50, 9.00),
     # Pro
     "gemini-2.5-pro": (1.25, 10.00),
-    "gemini-3.1-pro": (1.25, 10.00),
+    "gemini-3.1-pro": (2.00, 12.00),
 }
 
 # ── Thread-safe token counters ─────────────────────────────────────────────────
