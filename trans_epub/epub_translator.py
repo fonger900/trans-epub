@@ -85,14 +85,16 @@ def _scan_chapters(
         char_count = count_translatable_chars(item.get_content())
         is_cached = name in cache and not fresh
 
-        jobs.append({
-            "index": i,
-            "item": item,
-            "name": name,
-            "char_count": char_count,
-            "is_cached": is_cached,
-            "cached_content": cache.get(name) if is_cached else None,
-        })
+        jobs.append(
+            {
+                "index": i,
+                "item": item,
+                "name": name,
+                "char_count": char_count,
+                "is_cached": is_cached,
+                "cached_content": cache.get(name) if is_cached else None,
+            }
+        )
     return jobs
 
 
@@ -132,6 +134,7 @@ def _print_book_info(
         else:
             console.print("[bold]Est. cost:[/bold] [green]free[/green]")
 
+
 def _confirm_proceed(cached_chars: int, fresh: bool) -> bool:
     """Prompt user to confirm. Returns True to proceed, False to abort."""
     if not sys.stdin.isatty():
@@ -149,6 +152,7 @@ def _confirm_proceed(cached_chars: int, fresh: bool) -> bool:
         console.print("\n[yellow]Aborted[/yellow]")
         return False
     return True
+
 
 def _setup_progress(
     threads: int,
@@ -255,6 +259,7 @@ def translate_epub(
 
     if engine == "gemini":
         from .engines.gemini import reset_gemini_usage
+
         reset_gemini_usage()
 
     glossary: Glossary | None = None
