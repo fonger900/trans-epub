@@ -69,7 +69,7 @@ def translate_toc_and_nav(
         if nav_name in cache:
             item.set_content(cache[nav_name].encode("utf-8"))
             break
-        soup = BeautifulSoup(item.get_content(), "lxml")
+        soup = BeautifulSoup(item.get_content(), "xml")
         # Flatten anchor text to plain strings before HTML translation
         for anchor in soup.find_all("a"):
             text = anchor.get_text(strip=True)
@@ -126,7 +126,7 @@ def rebuild_toc_links(book: epub.EpubBook) -> None:
             continue
         if "toc" not in item.get_name().lower():
             continue
-        soup = BeautifulSoup(item.get_content(), "lxml")
+        soup = BeautifulSoup(item.get_content(), "xml")
         toc_div = soup.find(attrs={"role": "doc-toc"})
         if not toc_div:
             continue
