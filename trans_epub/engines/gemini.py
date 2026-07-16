@@ -97,7 +97,7 @@ def estimate_gemini_cost(
     Supports either a total character count or a list of per-chapter character counts
     to accurately capture repeated system prompt overhead per batch execution[cite: 1].
     """
-    model = model or os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
+    model = model or os.environ.get("GEMINI_MODEL") or _DEFAULT_MODEL
     input_price, output_price = _resolve_pricing(model)
 
     # Normalize input to a list of sizes for unified batch math
@@ -125,7 +125,7 @@ def estimate_gemini_cost(
 
 def actual_gemini_cost(model: str | None = None) -> float:
     """Calculate actual USD cost from accumulated token usage."""
-    model = model or os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
+    model = model or os.environ.get("GEMINI_MODEL") or _DEFAULT_MODEL
     input_price, output_price = _resolve_pricing(model)
     prompt, output = get_gemini_usage()
     return (prompt / 1_000_000) * input_price + (output / 1_000_000) * output_price
@@ -158,7 +158,7 @@ def gemini_translate(
     if not key:
         raise RuntimeError("GEMINI_API_KEY not found in environment")
 
-    model = os.environ.get("GEMINI_MODEL", _DEFAULT_MODEL)
+    model = os.environ.get("GEMINI_MODEL") or _DEFAULT_MODEL
 
     generation_config: dict = {"responseMimeType": "application/json"}
     if creativity is not None:

@@ -64,7 +64,7 @@ def alibaba_translate(
         else:
             base_url = _DEFAULT_BASE_URL
 
-    model = os.environ.get("DASHSCOPE_MODEL", _DEFAULT_MODEL)
+    model = os.environ.get("DASHSCOPE_MODEL") or _DEFAULT_MODEL
     max_tokens = int(os.environ.get("DASHSCOPE_MAX_TOKENS", _DEFAULT_MAX_TOKENS))
     temperature = DEFAULT_ALIBABA_CREATIVITY if creativity is None else creativity
 
