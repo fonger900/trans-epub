@@ -9,10 +9,7 @@ from dotenv import load_dotenv
 from .config import _find_file
 from .epub_translator import translate_epub
 
-try:
-    from importlib.metadata import PackageNotFoundError, version
-except ImportError:
-    from importlib_metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version("trans-epub")

@@ -127,7 +127,7 @@ def rebuild_toc_links(book: epub.EpubBook) -> None:
         if "toc" not in item.get_name().lower():
             continue
         soup = BeautifulSoup(item.get_content(), "xml")
-        toc_div = soup.find(attrs={"role": "doc-toc"})
+        toc_div = soup.find(attrs={"role": "doc-toc"})  # type: ignore[reportArgumentType]
         if not toc_div:
             continue
 

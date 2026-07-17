@@ -181,6 +181,7 @@ def translate_html(
                 parts[i] = html_lib.escape(parts[i], quote=False)
             escaped = "".join(parts)
             frag = BeautifulSoup(f"<x>{escaped}</x>", "lxml-xml").find("x")
+            assert frag is not None
             for child in list(frag.children):
                 node.append(child)
         else:

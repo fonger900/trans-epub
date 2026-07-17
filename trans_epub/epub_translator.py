@@ -73,7 +73,7 @@ def get_spine_items(book: epub.EpubBook) -> list:
 
 
 def _scan_chapters(
-    work_items: list[tuple[int, object]], cache: dict[str, str], fresh: bool
+    work_items: list[tuple[int, epub.EpubItem]], cache: dict[str, str], fresh: bool
 ) -> list[dict]:
     """Scan chapters to pre-calculate metrics and cache statuses.
 
@@ -385,6 +385,7 @@ def translate_epub(
             item.set_content(cached_content.encode("utf-8"))
 
     failed: list[tuple[str, str]] = []
+    executor: ThreadPoolExecutor | None = None
     try:
         with progress:
             translate_toc_and_nav(
@@ -399,21 +400,21 @@ def translate_epub(
             progress.update(toc_task, advance=1, visible=False)
 
             if threads > 1:
-                with ThreadPoolExecutor(max_workers=threads) as executor:
-                    futures = {
-                        executor.submit(process_chapter, job): job["name"]
-                        for job in jobs
-                    }
-                    for i, item in enumerate(items, 1):
-                        if only_chapters and i not in only_chapters:
-                            restore_skipped(i, item)
-                    for future in futures:
-                        try:
-                            future.result()
-                        except KeyboardInterrupt:
-                            raise
-                        except Exception as e:
-                            failed.append((futures[future], str(e)))
+                executor = ThreadPoolExecutor(max_workers=threads)
+                futures = {
+                    executor.submit(process_chapter, job): job["name"]
+                    for job in jobs
+                }
+                for i, item in enumerate(items, 1):
+                    if only_chapters and i not in only_chapters:
+                        restore_skipped(i, item)
+                for future in futures:
+                    try:
+                        future.result()
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as e:
+                        failed.append((futures[future], str(e)))
             else:
                 for job in jobs:
                     try:
@@ -427,7 +428,7 @@ def translate_epub(
                         restore_skipped(i, item)
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled by user[/yellow]")
-        if threads > 1:
+        if threads > 1 and executor is not None:
             executor.shutdown(wait=False, cancel_futures=True)
         console.print("[dim]Saving partial progress...[/dim]")
 
