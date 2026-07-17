@@ -14,7 +14,9 @@ from __future__ import annotations
 import json
 import os
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+import requests
 
 from .base import (
     ENGINES,
@@ -54,7 +56,7 @@ _prompt_tokens: int = 0
 _output_tokens: int = 0
 
 
-def _accumulate_usage(body: dict) -> None:
+def _accumulate_usage(body: dict[str, Any]) -> None:
     """Extract and accumulate token usage from a Gemini API response body."""
     usage = body.get("usageMetadata", {})
     if not usage:
@@ -160,7 +162,7 @@ def gemini_translate(
 
     model = os.environ.get("GEMINI_MODEL") or _DEFAULT_MODEL
 
-    generation_config: dict = {"responseMimeType": "application/json"}
+    generation_config: dict[str, Any] = {"responseMimeType": "application/json"}
     if creativity is not None:
         generation_config["temperature"] = creativity
     if max_tokens := os.environ.get("GEMINI_MAX_TOKENS"):
@@ -182,7 +184,7 @@ def gemini_translate(
             timeout=int(os.environ.get("GEMINI_TIMEOUT", "300")),
         )
 
-    def parse(resp):
+    def parse(resp: requests.Response) -> list[str]:
         body = resp.json()
         if "error" in body:
             raise ValueError(f"Gemini API error: {body['error']}")

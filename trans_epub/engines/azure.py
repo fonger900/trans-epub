@@ -3,6 +3,10 @@
 import os
 import uuid
 
+from typing import Any
+
+import requests
+
 from .base import (
     ENGINES,
     EngineConfig,
@@ -14,7 +18,7 @@ from .base import (
 _azure_limiter = RateLimiter(rpm=10)
 
 
-def azure_translate(texts: list[str], **_kwargs) -> list[str]:
+def azure_translate(texts: list[str], **_kwargs: Any) -> list[str]:
     key = os.environ.get("AZURE_TRANSLATOR_KEY")
     if not key:
         raise RuntimeError("AZURE_TRANSLATOR_KEY not found in environment")
@@ -36,7 +40,7 @@ def azure_translate(texts: list[str], **_kwargs) -> list[str]:
             timeout=30,
         )
 
-    def parse(resp):
+    def parse(resp: requests.Response) -> list[str]:
         return [r["translations"][0]["text"] for r in resp.json()]
 
     return call_with_retry("Azure", do_request, parse, max_attempts=8)

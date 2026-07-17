@@ -7,6 +7,10 @@ Set DEEPL_API_BASE to override the endpoint.
 
 import os
 
+from typing import Any
+
+import requests
+
 from .base import (
     ENGINES,
     EngineConfig,
@@ -17,7 +21,7 @@ from .base import (
 _DEFAULT_BASE = "https://api-free.deepl.com/v2/translate"
 
 
-def deepl_translate(texts: list[str], **_kwargs) -> list[str]:
+def deepl_translate(texts: list[str], **_kwargs: Any) -> list[str]:
     key = os.environ.get("DEEPL_API_KEY")
     if not key:
         raise RuntimeError("DEEPL_API_KEY not found in environment")
@@ -39,7 +43,7 @@ def deepl_translate(texts: list[str], **_kwargs) -> list[str]:
             timeout=30,
         )
 
-    def parse(resp):
+    def parse(resp: requests.Response) -> list[str]:
         return [t["text"] for t in resp.json()["translations"]]
 
     return call_with_retry("DeepL", do_request, parse)

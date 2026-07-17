@@ -14,7 +14,7 @@ Public API:
 
 from .cli import __version__, main, resolve_engine  # noqa: F401
 from .config import load_glossary  # noqa: F401
-from .engines import (  # noqa: F401
+from .engines.base import (  # noqa: F401
     ENGINES,
     EngineConfig,
     extract_translations,

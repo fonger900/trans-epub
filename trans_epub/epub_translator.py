@@ -10,6 +10,7 @@ import threading
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
 from ebooklib import ITEM_DOCUMENT, epub
 from rich.console import Console
@@ -62,7 +63,7 @@ def _repack_epub(path: str) -> None:
     Path(path).write_bytes(buf.getvalue())
 
 
-def get_spine_items(book: epub.EpubBook) -> list:
+def get_spine_items(book: epub.EpubBook) -> list[epub.EpubItem]:
     """Return spine items in spine order, skipping any missing IDs."""
     spine_ids = [idref for idref, _ in book.spine]
     by_id = {item.get_id(): item for item in book.get_items_of_type(ITEM_DOCUMENT)}
@@ -74,7 +75,7 @@ def get_spine_items(book: epub.EpubBook) -> list:
 
 def _scan_chapters(
     work_items: list[tuple[int, epub.EpubItem]], cache: dict[str, str], fresh: bool
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Scan chapters to pre-calculate metrics and cache statuses.
 
     Prevents redundant HTML parsing and lock-heavy cache checks during execution[cite: 3].
@@ -102,7 +103,7 @@ def _print_book_info(
     total_items: int,
     engine: str,
     threads: int,
-    jobs: list[dict],
+    jobs: list[dict[str, Any]],
     glossary: Glossary | None = None,
     extra_prompt: str = "",
 ) -> None:
@@ -318,7 +319,7 @@ def translate_epub(
     )
     progress.update(overall_task, total=len(jobs))
 
-    def process_chapter(job: dict) -> None:
+    def process_chapter(job: dict[str, Any]) -> None:
         nonlocal total_chars, cached_chars
         item = job["item"]
         name = job["name"]
@@ -378,7 +379,7 @@ def translate_epub(
         with worker_lock:
             free_workers.append(wid)
 
-    def restore_skipped(i: int, item) -> None:
+    def restore_skipped(_i: int, item: epub.EpubItem) -> None:
         with cache_lock:
             cached_content = cache.get(item.get_name())
         if cached_content:

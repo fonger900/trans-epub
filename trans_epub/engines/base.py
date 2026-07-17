@@ -41,6 +41,10 @@ class RateLimiter:
     sleeps until a request slot is available.
     """
 
+    _interval: float
+    _lock: threading.Lock
+    _next: float
+
     def __init__(self, rpm: int) -> None:
         self._interval = 60.0 / rpm  # seconds between requests
         self._lock = threading.Lock()
@@ -63,7 +67,7 @@ class EngineConfig:
     """Configuration for a translation engine."""
 
     name: str
-    translate: Callable
+    translate: Callable[..., list[str]]
     char_limit: int
     elem_limit: int
     delay: float

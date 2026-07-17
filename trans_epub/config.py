@@ -5,6 +5,8 @@ Glossary loading for character pronouns and terminology.
 
 from __future__ import annotations
 
+from typing import Any
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -26,13 +28,13 @@ def _find_file(filename: str) -> Path | None:
 # ── TOML loading ──────────────────────────────────────────────────────────────
 
 
-def _load_toml(path: Path) -> dict:
+def _load_toml(path: Path) -> dict[str, Any]:
     """Load TOML file, return empty dict on failure."""
     try:
         import tomllib
     except ImportError:
         try:
-            import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib  # type: ignore[no-redef, import-untyped]
         except ImportError:
             return {}
     try:

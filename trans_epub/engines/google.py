@@ -6,6 +6,10 @@ Optionally set GOOGLE_TRANSLATE_REGION to override the region (default: global).
 
 import os
 
+from typing import Any
+
+import requests
+
 from .base import (
     ENGINES,
     EngineConfig,
@@ -14,7 +18,7 @@ from .base import (
 )
 
 
-def google_translate(texts: list[str], **_kwargs) -> list[str]:
+def google_translate(texts: list[str], **_kwargs: Any) -> list[str]:
     key = os.environ.get("GOOGLE_TRANSLATE_API_KEY")
     if not key:
         raise RuntimeError("GOOGLE_TRANSLATE_API_KEY not found in environment")
@@ -38,7 +42,7 @@ def google_translate(texts: list[str], **_kwargs) -> list[str]:
             timeout=30,
         )
 
-    def parse(resp):
+    def parse(resp: requests.Response) -> list[str]:
         data = resp.json()
         if "error" in data:
             raise RuntimeError(

@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from ebooklib import epub
 
 from .config import Glossary
-from .engines import ENGINES
+from .engines.base import ENGINES
 from .html_translator import translate_html
 
 _TOC_KEY = "__toc__"
@@ -27,15 +27,15 @@ def translate_toc_and_nav(
     Uses *cache* to avoid re-translating the TOC on subsequent runs.
     """
     titles: list[str] = []
-    links: list = []
+    links: list[epub.Link] = []
 
-    def walk_links(link_list):
+    def walk_links(link_list: list[epub.Link]) -> None:
         for link in link_list:
             if getattr(link, "title", None):
                 titles.append(link.title)
                 links.append(link)
             if getattr(link, "content", None):
-                walk_links(link.content)
+                walk_links(link.content)  # type: ignore[arg-type]
 
     walk_links(book.toc or [])
 
@@ -112,12 +112,12 @@ def rebuild_toc_links(book: epub.EpubBook) -> None:
     """Rebuild <a> tags in the in-book TOC page from book.toc link hrefs."""
     from posixpath import dirname
 
-    toc_entries = []
+    toc_entries: list[str] = []
     for link in book.toc or []:
         if getattr(link, "href", None):
             toc_entries.append(link.href)
         if getattr(link, "content", None):
-            for child in link.content:
+            for child in link.content:  # type: ignore[union-attr]
                 if getattr(child, "href", None):
                     toc_entries.append(child.href)
 
@@ -127,7 +127,7 @@ def rebuild_toc_links(book: epub.EpubBook) -> None:
         if "toc" not in item.get_name().lower():
             continue
         soup = BeautifulSoup(item.get_content(), "xml")
-        toc_div = soup.find(attrs={"role": "doc-toc"})  # type: ignore[reportArgumentType]
+        toc_div = soup.find("div", attrs={"role": "doc-toc"})
         if not toc_div:
             continue
 

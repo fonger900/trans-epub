@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trans_epub.epub_translator import _short_name, get_spine_items, translate_epub
-from trans_epub.engines import ENGINES, EngineConfig
+from trans_epub.engines.base import ENGINES, EngineConfig
 
 
 class TestShortName:

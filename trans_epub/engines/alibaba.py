@@ -22,6 +22,8 @@ import json
 import os
 from typing import TYPE_CHECKING
 
+import requests
+
 from .base import (
     ENGINES,
     EngineConfig,
@@ -89,7 +91,7 @@ def alibaba_translate(
             timeout=300,
         )
 
-    def parse(resp):
+    def parse(resp: requests.Response) -> list[str]:
         raw = resp.json()["choices"][0]["message"]["content"]
         return extract_translations(raw)
 

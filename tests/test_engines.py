@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trans_epub.engines import ENGINES
+from trans_epub.engines.base import ENGINES
 from trans_epub.engines.base import (
     EngineConfig,
     extract_translations,

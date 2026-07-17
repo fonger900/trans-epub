@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup, Tag
 from bs4.element import NavigableString
 
 from .config import Glossary
-from .engines import EMPHASIS_TAGS, ENGINES
+from .engines.base import EMPHASIS_TAGS, ENGINES
 
 # Tags whose text content should be translated
 TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}
@@ -33,20 +33,21 @@ ProgressCallback = Callable[[int, int, int], None]
 _STRIP_TAGS_RE = re.compile(rf"<(?!/?(?:{'|'.join(EMPHASIS_TAGS)})\b)[^>]+>", re.I)
 
 
-def _should_preserve(tag, preserve_tags: set[str], preserve_classes: set[str]) -> bool:
+def _should_preserve(tag: Tag, preserve_tags: set[str], preserve_classes: set[str]) -> bool:
     """Check if *tag* (or any of its ancestors) should be preserved."""
     for current in [tag, *tag.parents]:
         if getattr(current, "name", None) in preserve_tags:
             return True
-        classes = current.get("class", []) if hasattr(current, "get") else []
-        if isinstance(classes, str):
-            classes = classes.split()
-        if any(cls in preserve_classes for cls in classes):
-            return True
+        if hasattr(current, "get"):
+            classes: list[str] | str = current.get("class") or []  # type: ignore[assignment]
+            if isinstance(classes, str):
+                classes = classes.split()
+            if any(cls in preserve_classes for cls in classes):
+                return True
     return False
 
 
-def _get_translatable_nodes(soup):
+def _get_translatable_nodes(soup: BeautifulSoup) -> list[Tag]:
     """Return all translatable tag nodes from a BeautifulSoup *soup*."""
     return [
         tag

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from ebooklib import epub
 
-from trans_epub.engines import ENGINES
+from trans_epub.engines.base import ENGINES
 from trans_epub.toc import translate_toc_and_nav
 
 
