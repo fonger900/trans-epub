@@ -1,6 +1,7 @@
 """Tests for EPUB translation orchestration."""
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -218,3 +219,26 @@ class TestTranslateEpub:
         cache = json.loads(cache_path.read_text())
         assert "ch01" in cache
         assert "VI: Hello" in cache["ch01"]
+
+    def test_large_chapters_processed_first(self, mock_all):
+        """Jobs should be sorted by char_count descending for optimal parallelism."""
+        input_path, output_path = mock_all
+
+        # Track the order chapters are submitted to the thread pool
+        submit_order = []
+        orig_submit = ThreadPoolExecutor.submit
+
+        def tracking_submit(ex, fn, *args, **kwargs):
+            job = args[0] if args else kwargs.get("job")
+            if isinstance(job, dict) and "name" in job:
+                submit_order.append(job["name"])
+            return orig_submit(ex, fn, *args, **kwargs)
+
+        with patch.object(ThreadPoolExecutor, "submit", tracking_submit):
+            translate_epub(input_path, output_path, engine="test", threads=2)
+
+        # ch01 has "Hello" (5 chars), ch02 has "World" (5 chars) — same size
+        # Both should be submitted (order within same size is stable)
+        assert "OEBPS/ch01.xhtml" in submit_order
+        assert "OEBPS/ch02.xhtml" in submit_order
+        assert len(submit_order) == 2

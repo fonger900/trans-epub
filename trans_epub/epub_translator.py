@@ -9,7 +9,7 @@ import os
 import sys
 import threading
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -361,8 +361,10 @@ def translate_epub(
         if not only_chapters or i in only_chapters
     ]
 
-    # Compile jobs in a single pass
+    # Compile jobs in a single pass, sort by size descending
+    # so large chapters start first and run in parallel from the start.
     jobs = _scan_chapters(work_items, cache, fresh)
+    jobs.sort(key=lambda j: j["char_count"], reverse=True)
     _print_book_info(
         len(items), engine, threads, jobs, glossary=glossary, extra_prompt=extra_prompt
     )
@@ -476,20 +478,20 @@ def translate_epub(
 
             if threads > 1:
                 executor = ThreadPoolExecutor(max_workers=threads)
-                futures = {
+                future_map = {
                     executor.submit(process_chapter, job): job["name"]
                     for job in jobs
                 }
                 for i, item in enumerate(items, 1):
                     if only_chapters and i not in only_chapters:
                         restore_skipped(i, item)
-                for future in futures:
+                for future in as_completed(future_map):
                     try:
                         future.result()
                     except KeyboardInterrupt:
                         raise
                     except Exception as e:
-                        failed.append((futures[future], str(e)))
+                        failed.append((future_map[future], str(e)))
             else:
                 for job in jobs:
                     try:
