@@ -190,6 +190,22 @@ def _print_book_info(
         else:
             console.print("[bold]Est. cost:[/bold] [green]free[/green]")
 
+        # Warn about free tier RPM limits for lite models
+        import os
+
+        model = os.environ.get("GEMINI_MODEL") or ""
+        if "lite" in model.lower():
+            batch_count = sum(
+                max(1, (c + 20_000 - 1) // 20_000)
+                for c in pending_chapters if c > 0
+            )
+            if batch_count > 15:
+                est_min = batch_count / 15
+                console.print(
+                    f"[yellow]Free tier:[/yellow] {batch_count} API calls"
+                    f" at 15 RPM = ~{est_min:.0f} min minimum"
+                )
+
 
 def _confirm_proceed(cached_chars: int, fresh: bool) -> bool:
     """Prompt user to confirm. Returns True to proceed, False to abort."""

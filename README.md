@@ -130,7 +130,7 @@ See [.trans-epub/glossary.example.toml](.trans-epub/glossary.example.toml) for a
 | Azure Translator | ~$25/million chars | Cheap for bulk, free tier: 2M chars/month |
 | Alibaba Qwen | ~$0.80/million chars | Best value, qwen-mt-plus optimized for translation |
 | DeepSeek | ~$2/million chars | Often has free tier promotions |
-| Google Gemini | ~$1.50/million chars | High quality, fast |
+| Google Gemini | ~$1.50/million chars | Free tier: 15 RPM, 250K tokens/min. Check limits. |
 | Google Cloud Translation | ~$20/million chars | Premium MT, no LLM overhead |
 | DeepL | ~$25/million chars | Free tier: 500K chars/month |
 

@@ -96,8 +96,13 @@ def estimate_gemini_cost(
 ) -> float:
     """Estimate USD cost for translating English text to Vietnamese.
 
+    Token count assumptions (conservative, actual varies ~10%):
+    - English input: ~4 characters per token
+    - Vietnamese output: ~3.5 characters per token
+    - LLM prompt overhead: ~3 characters per token (special tokens)
+
     Supports either a total character count or a list of per-chapter character counts
-    to accurately capture repeated system prompt overhead per batch execution[cite: 1].
+    to accurately capture repeated system prompt overhead per batch execution.
     """
     model = model or os.environ.get("GEMINI_MODEL") or _DEFAULT_MODEL
     input_price, output_price = _resolve_pricing(model)
@@ -114,11 +119,11 @@ def estimate_gemini_cost(
             continue
         num_batches = max(1, (c_chars + batch_size - 1) // batch_size)
 
-        # Input: ~3 English characters per token + system prompt overhead per batch[cite: 1]
-        total_input_tokens += (c_chars / 3.0) + (prompt_chars / 3.0) * num_batches
+        # English: ~4 chars/token. Prompt overhead: ~3 chars/token.
+        total_input_tokens += (c_chars / 4.0) + (prompt_chars / 3.0) * num_batches
 
-        # Output: ~1.8 characters per token (Vietnamese diacritics compress less efficiently)
-        total_output_tokens += c_chars / 1.8
+        # Vietnamese: ~3.5 chars/token (similar to English, not worse)
+        total_output_tokens += c_chars / 3.5
 
     return (total_input_tokens / 1_000_000) * input_price + (
         total_output_tokens / 1_000_000
