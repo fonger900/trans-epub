@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import signal
 import sys
 import threading
 import zipfile
@@ -339,6 +340,7 @@ def translate_epub(
     dry_run: bool = False,
     verbose: bool = False,
     rpm: int | None = None,
+    chapter_timeout: int = 600,
     extra_prompt: str = "",
 ) -> None:
     """Translate *input_path* from English to Vietnamese and write *output_path*."""
@@ -567,19 +569,30 @@ def translate_epub(
                 for i, item in enumerate(items, 1):
                     if only_chapters and i not in only_chapters:
                         restore_skipped(i, item)
-                for future in as_completed(future_map):
-                    try:
-                        future.result()
-                    except KeyboardInterrupt:
-                        raise
-                    except Exception as e:
-                        failed.append((future_map[future], str(e)))
+                try:
+                    for future in as_completed(future_map, timeout=chapter_timeout):
+                        try:
+                            future.result()
+                        except KeyboardInterrupt:
+                            raise
+                        except Exception as e:
+                            failed.append((future_map[future], str(e)))
+                except TimeoutError:
+                    for future, name in future_map.items():
+                        if not future.done():
+                            future.cancel()
+                            failed.append((name, f"timed out after {chapter_timeout}s"))
             else:
+                single_executor = ThreadPoolExecutor(max_workers=1)
                 for job in jobs:
                     try:
-                        process_chapter(job)
+                        single_executor.submit(
+                            process_chapter, job
+                        ).result(timeout=chapter_timeout)
                     except KeyboardInterrupt:
                         raise
+                    except TimeoutError:
+                        failed.append((job["name"], f"timed out after {chapter_timeout}s"))
                     except Exception as e:
                         failed.append((job["name"], str(e)))
                 for i, item in enumerate(items, 1):
@@ -587,6 +600,9 @@ def translate_epub(
                         restore_skipped(i, item)
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled by user[/yellow]")
+        # Suppress subsequent Ctrl+C during cleanup to prevent
+        # ThreadPoolExecutor atexit traceback on shutdown.
+        signal.signal(signal.SIGINT, lambda *_: None)
         if threads > 1 and executor is not None:
             executor.shutdown(wait=False, cancel_futures=True)
         console.print("[dim]Saving partial progress...[/dim]")

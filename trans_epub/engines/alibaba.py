@@ -88,7 +88,7 @@ def alibaba_translate(
                 "max_tokens": max_tokens,
                 "response_format": {"type": "json_object"},
             },
-            timeout=300,
+            timeout=120,
         )
 
     def parse(resp: requests.Response) -> list[str]:

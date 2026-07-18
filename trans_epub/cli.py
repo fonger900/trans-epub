@@ -104,6 +104,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Override API rate limit (requests per minute). Free tiers: 10-15. Paid: higher.",
     )
     parser.add_argument(
+        "--chapter-timeout",
+        type=int,
+        default=600,
+        metavar="SECS",
+        help="Max seconds per chapter before failing it (default: 600).",
+    )
+    parser.add_argument(
         "--prompt",
         "-p",
         type=Path,
@@ -146,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         dry_run=args.dry_run,
         verbose=args.verbose,
         rpm=args.rpm,
+        chapter_timeout=args.chapter_timeout,
         extra_prompt=extra_prompt,
     )
     return 0

@@ -181,7 +181,7 @@ def gemini_translate(
                 "generationConfig": generation_config,
                 "safetySettings": _SAFETY_SETTINGS,
             },
-            timeout=int(os.environ.get("GEMINI_TIMEOUT", "300")),
+            timeout=int(os.environ.get("GEMINI_TIMEOUT", "120")),
         )
 
     def parse(resp: requests.Response) -> list[str]:
