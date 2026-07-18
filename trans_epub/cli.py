@@ -97,6 +97,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Show detailed per-request logging and retry information",
     )
     parser.add_argument(
+        "--rpm",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Override API rate limit (requests per minute). Free tiers: 10-15. Paid: higher.",
+    )
+    parser.add_argument(
         "--prompt",
         "-p",
         type=Path,
@@ -138,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         fresh=args.fresh,
         dry_run=args.dry_run,
         verbose=args.verbose,
+        rpm=args.rpm,
         extra_prompt=extra_prompt,
     )
     return 0

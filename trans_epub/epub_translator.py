@@ -338,10 +338,18 @@ def translate_epub(
     fresh: bool = False,
     dry_run: bool = False,
     verbose: bool = False,
+    rpm: int | None = None,
     extra_prompt: str = "",
 ) -> None:
     """Translate *input_path* from English to Vietnamese and write *output_path*."""
     set_verbose(verbose)
+    if rpm is not None:
+        from .engines.base import ENGINES, RateLimiter
+
+        if engine in ENGINES:
+            ENGINES[engine].limiter = RateLimiter(rpm=rpm)
+            if verbose:
+                console.print(f"[dim]Rate limit: {rpm} RPM[/dim]")
     cache_path = Path(output_path + ".cache.json")
     cache: dict[str, str] = _load_cache(cache_path, input_path, fresh)
 
