@@ -3,6 +3,8 @@
 [![Python](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/github/license/fonger900/trans-epub)](LICENSE)
 
+![terminal image](./transepub.png)
+
 Translate EPUB books from English to Vietnamese using AI translation engines.
 
 **Supported Engines:** Azure Translator, Google Gemini, DeepSeek, Alibaba Qwen, Google Cloud Translation, DeepL
