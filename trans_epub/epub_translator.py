@@ -114,12 +114,15 @@ def _load_cache(
 
 
 def _save_cache(cache_path: Path, cache: dict[str, str], input_path: str) -> None:
-    """Save cache with EPUB integrity hash."""
+    """Save cache with EPUB integrity hash. Uses atomic write to prevent
+    corruption from crashes mid-save."""
     epub_path = Path(input_path)
     if epub_path.exists():
         epub_hash = hashlib.md5(epub_path.read_bytes()).hexdigest()
         cache[_CACHE_HASH_KEY] = epub_hash
-    cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+    tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(cache, ensure_ascii=False))
+    os.replace(tmp_path, cache_path)
     cache.pop(_CACHE_HASH_KEY, None)
 
 

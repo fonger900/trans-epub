@@ -124,6 +124,41 @@ class TestSaveCache:
         # After save, the original dict should be clean
         assert cache == {"ch01": "t1", "ch02": "t2"}
 
+    def test_atomic_write_no_temp_file_left(self, tmp_path):
+        """Temp file should be cleaned up after atomic write."""
+        epub_path = tmp_path / "test.epub"
+        epub_path.write_text("content")
+        cache_path = tmp_path / "test.cache.json"
+        cache = {"ch01": "t1"}
+
+        _save_cache(cache_path, cache, str(epub_path))
+
+        # Main cache file should exist
+        assert cache_path.exists()
+        saved = json.loads(cache_path.read_text())
+        assert saved["ch01"] == "t1"
+        # Temp file should NOT exist
+        tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+        assert not tmp_path.exists()
+
+    def test_atomic_write_survives_existing_temp(self, tmp_path):
+        """Stale temp file from previous crash should not break save."""
+        epub_path = tmp_path / "test.epub"
+        epub_path.write_text("content")
+        cache_path = tmp_path / "test.cache.json"
+        tmp_file = cache_path.with_suffix(cache_path.suffix + ".tmp")
+
+        # Simulate stale temp file from previous crash
+        tmp_file.write_text("garbage")
+
+        cache = {"ch01": "fresh"}
+        _save_cache(cache_path, cache, str(epub_path))
+
+        # Should overwrite stale temp and produce valid cache
+        saved = json.loads(cache_path.read_text())
+        assert saved["ch01"] == "fresh"
+        assert not tmp_file.exists()
+
 
 # ── RateLimiter ───────────────────────────────────────────────────────────────
 
