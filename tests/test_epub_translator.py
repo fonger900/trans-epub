@@ -1,5 +1,7 @@
 """Tests for EPUB translation orchestration."""
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -135,8 +137,84 @@ class TestTranslateEpub:
 
     def test_engine_not_found(self, mock_all, capsys):
         input_path, output_path = mock_all
-        # translate_epub catches chapter errors and collects them in failed list
         translate_epub(input_path, output_path, engine="nonexistent")
         captured = capsys.readouterr()
         assert "failed" in captured.out
         assert "nonexistent" in captured.out
+
+    def test_dry_run_does_not_make_api_calls(self, mock_all):
+        """Dry run should scan and report but skip translation entirely."""
+        input_path, output_path = mock_all
+        with (
+            patch(
+                "trans_epub.epub_translator.translate_toc_and_nav"
+            ) as mock_toc,
+            patch(
+                "trans_epub.epub_translator.translate_html"
+            ) as mock_html,
+        ):
+            translate_epub(
+                input_path, output_path, engine="test", dry_run=True
+            )
+
+        mock_toc.assert_not_called()
+        mock_html.assert_not_called()
+        assert not Path(output_path).exists()
+
+    def test_verbose_flag_sets_module_var(self, mock_all):
+        """--verbose should enable verbose mode in base module."""
+        input_path, output_path = mock_all
+        with patch("trans_epub.epub_translator.set_verbose") as mock_set:
+            translate_epub(
+                input_path, output_path, engine="test", verbose=True
+            )
+            mock_set.assert_called_once_with(True)
+
+    def test_cache_survives_chapter_failure(self, mock_all, tmp_path):
+        """If one chapter fails, cache should still save successful ones."""
+        input_path, output_path = mock_all
+
+        def flaky_translate(texts, **_kwargs):
+            if texts == ["World"]:
+                raise RuntimeError("API error on ch2")
+            return ["VI: " + t for t in texts]
+
+        cfg = EngineConfig(
+            name="test",
+            translate=flaky_translate,
+            char_limit=10_000,
+            elem_limit=50,
+            delay=0,
+        )
+
+        # Build fresh mocks with known content
+        book = MagicMock()
+        book.items = []
+        book.spine = [("ch1", True), ("ch2", True)]
+        book.toc = []
+        ch1 = MagicMock()
+        ch1.get_id.return_value = "ch1"
+        ch1.get_name.return_value = "ch01"
+        ch1.get_content.return_value = b"<p>Hello</p>"
+        ch2 = MagicMock()
+        ch2.get_id.return_value = "ch2"
+        ch2.get_name.return_value = "ch02"
+        ch2.get_content.return_value = b"<p>World</p>"
+        book.get_items_of_type.return_value = [ch1, ch2]
+
+        engines_patch = patch.dict(ENGINES, dict(test=cfg))
+
+        with (
+            patch("trans_epub.epub_translator.epub.read_epub", return_value=book),
+            patch("trans_epub.epub_translator.epub.write_epub"),
+            patch("trans_epub.epub_translator.translate_toc_and_nav"),
+            patch("trans_epub.epub_translator._repack_epub"),
+            engines_patch,
+        ):
+            translate_epub(input_path, output_path, engine="test", threads=1)
+
+        cache_path = Path(output_path + ".cache.json")
+        assert cache_path.exists()
+        cache = json.loads(cache_path.read_text())
+        assert "ch01" in cache
+        assert "VI: Hello" in cache["ch01"]

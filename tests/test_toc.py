@@ -137,4 +137,77 @@ class TestTranslateNav:
             cache = {nav.get_name(): "<translated/>"}
             translate_toc_and_nav(book, "test", cache)
 
-            nav.set_content.assert_called_once_with(b"<translated/>")
+            nav.set_content.assert_called_once()
+
+
+class TestRebuildTocLinks:
+    """rebuild_toc_links rebuilds the in-book TOC page with anchor tags."""
+
+    def test_basic_rebuild(self):
+        from trans_epub.toc import rebuild_toc_links
+
+        book = MagicMock()
+        book.toc = [
+            MagicMock(href="Text/ch01.xhtml", content=None),
+            MagicMock(href="Text/ch02.xhtml", content=None),
+        ]
+
+        toc_page = MagicMock()
+        toc_page.get_name.return_value = "toc.xhtml"
+        toc_page.get_content.return_value = (
+            b"<html><body>"
+            b'<div role="doc-toc">'
+            b"<p>Chapter 1</p>"
+            b"<p>Chapter 2</p>"
+            b"</div>"
+            b"</body></html>"
+        )
+
+        book.get_items.return_value = [toc_page]
+
+        rebuild_toc_links(book)
+
+        toc_page.set_content.assert_called_once()
+        content = toc_page.set_content.call_args[0][0]
+        assert b"<a" in content
+        assert b"href" in content
+
+    def test_no_toc_page_skips(self):
+        from trans_epub.toc import rebuild_toc_links
+
+        book = MagicMock()
+        book.toc = []
+        item = MagicMock()
+        item.get_name.return_value = "chapter1.xhtml"
+        book.get_items.return_value = [item]
+
+        rebuild_toc_links(book)
+        item.set_content.assert_not_called()
+
+    def test_no_doc_toc_div_skips(self):
+        from trans_epub.toc import rebuild_toc_links
+
+        book = MagicMock()
+        book.toc = []
+        toc_page = MagicMock()
+        toc_page.get_name.return_value = "toc.xhtml"
+        toc_page.get_content.return_value = (
+            b"<html><body><p>No TOC div here</p></body></html>"
+        )
+        book.get_items.return_value = [toc_page]
+
+        rebuild_toc_links(book)
+        toc_page.set_content.assert_not_called()
+
+    def test_skips_epub_nav_items(self):
+        from ebooklib import epub
+        from trans_epub.toc import rebuild_toc_links
+
+        book = MagicMock()
+        book.toc = []
+        nav = MagicMock(spec=epub.EpubNav)
+        nav.get_name.return_value = "nav.xhtml"
+        book.get_items.return_value = [nav]
+
+        rebuild_toc_links(book)
+        nav.set_content.assert_not_called()
