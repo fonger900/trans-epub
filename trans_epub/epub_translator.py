@@ -28,7 +28,7 @@ from rich.progress import (
 )
 
 from .config import Glossary, load_glossary, validate_glossary, scan_glossary_matches
-from .engines.base import set_verbose, set_current_chapter
+from .engines.base import set_verbose, set_current_chapter, set_current_chapter_info
 from .html_translator import count_translatable_chars, translate_html
 from .toc import rebuild_toc_links, translate_toc_and_nav
 

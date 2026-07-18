@@ -234,6 +234,11 @@ def translate_html(
     for i, (batch, src_batch) in enumerate(zip(batches, source_batches)):
         if cfg.delay and i > 0:
             time.sleep(cfg.delay)
+        # Update chapter context with batch info for retry messages
+        from .engines.base import set_current_chapter_info
+
+        if total_batches > 1:
+            set_current_chapter_info(f"batch {i + 1}/{total_batches}")
         translated = translate_batch(batch)
         translated_all.extend(translated)
         translated_sources.extend(src_batch)

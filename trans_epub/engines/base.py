@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 _VERBOSE = False
 _CURRENT_CHAPTER = ""  # set by process_chapter for error context
+_CURRENT_CHAPTER_INFO = ""  # extra info like batch number
 
 
 def set_verbose(enabled: bool) -> None:
@@ -38,8 +39,15 @@ def set_verbose(enabled: bool) -> None:
 
 def set_current_chapter(name: str) -> None:
     """Set current chapter name for error context in retry messages."""
-    global _CURRENT_CHAPTER
+    global _CURRENT_CHAPTER, _CURRENT_CHAPTER_INFO
     _CURRENT_CHAPTER = name
+    _CURRENT_CHAPTER_INFO = ""
+
+
+def set_current_chapter_info(info: str) -> None:
+    """Append extra context like batch number to the current chapter label."""
+    global _CURRENT_CHAPTER_INFO
+    _CURRENT_CHAPTER_INFO = info
 
 
 http_session = requests.Session()
@@ -230,6 +238,16 @@ def call_with_retry(
         limiter: Optional RateLimiter — if given, ``wait()`` is called before
                  each request to stay under RPM limits.
     """
+    # Build context label for retry messages
+    def _ctx():
+        chapter = _CURRENT_CHAPTER
+        info = _CURRENT_CHAPTER_INFO
+        if chapter and info:
+            return f"{engine_name} | {chapter} | {info}"
+        if chapter:
+            return f"{engine_name} | {chapter}"
+        return engine_name
+
     for attempt in range(max_attempts):
         label = f"attempt {attempt + 1}/{max_attempts}"
 
@@ -242,18 +260,16 @@ def call_with_retry(
             resp = request_fn()
             elapsed = time.monotonic() - t0
             if _VERBOSE:
-                ctx = f"[{engine_name}]" if not _CURRENT_CHAPTER else f"[{engine_name} | {_CURRENT_CHAPTER}]"
                 print(
-                    f"\n    {ctx} {label}: "
+                    f"\n    [{_ctx()}] {label}: "
                     f"{resp.status_code} in {elapsed:.1f}s",
                     end="",
                     flush=True,
                 )
         except requests.exceptions.RequestException as e:
             wait = min(3 * 2**attempt, 60)
-            ctx = f"[{engine_name}]" if not _CURRENT_CHAPTER else f"[{engine_name} | {_CURRENT_CHAPTER}]"
             print(
-                f"\n    {ctx} Request error ({label}): {e}. Retrying in {wait}s...",
+                f"\n    [{_ctx()}] Request error ({label}): {e}. Retrying in {wait}s...",
                 end=" ",
                 flush=True,
             )
@@ -282,7 +298,7 @@ def call_with_retry(
             if is_quota_issue:
                 wait = min(int(resp.headers.get("Retry-After", 3 * 2**attempt)), 300)
                 print(
-                    f"\n    [{engine_name}] Quota exceeded ({label}), waiting {wait}s... "
+                    f"\n    [{_ctx()}] Quota exceeded ({label}), waiting {wait}s... "
                     f"Check API quota or adjust creativity/char_limit.",
                     end=" ",
                     flush=True,
@@ -290,7 +306,7 @@ def call_with_retry(
             else:
                 wait = min(int(resp.headers.get("Retry-After", 3 * 2**attempt)), 60)
                 print(
-                    f"\n    [{engine_name}] Rate limited ({label}), waiting {wait}s...",
+                    f"\n    [{_ctx()}] Rate limited ({label}), waiting {wait}s...",
                     end=" ",
                     flush=True,
                 )
@@ -305,7 +321,7 @@ def call_with_retry(
             body = str(body)[:2000]
             reason = resp.reason or ""
             raise requests.exceptions.HTTPError(
-                f"[{engine_name}] {resp.status_code} ({label}): {reason}\n"
+                f"[{_ctx()}] {resp.status_code} ({label}): {reason}\n"
                 f"Body: {body}",
                 response=resp,
             )
@@ -316,7 +332,7 @@ def call_with_retry(
             return parse_fn(resp)
         except Exception as e:
             print(
-                f"\n    [{engine_name}] Parse error ({label}): {e}. Retrying...",
+                f"\n    [{_ctx()}] Parse error ({label}): {e}. Retrying...",
                 end=" ",
                 flush=True,
             )
@@ -325,7 +341,7 @@ def call_with_retry(
             continue
 
     raise RuntimeError(
-        f"[{engine_name}] translation failed after {max_attempts} attempts"
+        f"[{_ctx()}] translation failed after {max_attempts} attempts"
     )
 
 
