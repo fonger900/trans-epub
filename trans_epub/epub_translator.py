@@ -27,7 +27,7 @@ from rich.progress import (
 )
 
 from .config import Glossary, load_glossary, validate_glossary, scan_glossary_matches
-from .engines.base import set_verbose
+from .engines.base import set_verbose, set_current_chapter
 from .html_translator import count_translatable_chars, translate_html
 from .toc import rebuild_toc_links, translate_toc_and_nav
 
@@ -271,23 +271,55 @@ def _print_results(
     )
 
     if failed:
+        # Categorize failures for targeted recovery advice
+        quota_fails = []
+        network_fails = []
+        parse_fails = []
+        other_fails = []
+        for name, err in failed:
+            err_lower = err.lower()
+            if any(kw in err_lower for kw in ("quota", "limit exceeded", "daily limit",
+                    "insufficient quota", "billing", "payment required", "rate limit")):
+                quota_fails.append((name, err))
+            elif any(kw in err_lower for kw in ("timeout", "connection", "network",
+                    "reset by peer", "refused")):
+                network_fails.append((name, err))
+            elif "parse" in err_lower or "json" in err_lower:
+                parse_fails.append((name, err))
+            else:
+                other_fails.append((name, err))
+
         console.print(
-            f"\n[bold red]{len(failed)} item(s) failed[/bold red] (re-run to retry):"
-        )
-        for name, e in failed:
-            console.print(f"  [red]•[/red] {name}: {e}")
-        console.print(
-            "\n[dim]Tips:[/dim]"
-            " If quota exceeded: reduce creativity, increase delay between requests,"
-            " or check API quota limits."
+            f"\n[bold red]{len(failed)} item(s) failed[/bold red]"
+            f" ([dim]re-run to retry[/dim]):"
         )
 
-    if any("quota" in e.lower() for _, e in failed) or any(
-        "limit" in e.lower() for _, e in failed
-    ):
-        console.print(
-            "\n[dim]Note: If API quota exceeded, try --fresh to start fresh or "
-            "reduce --creativity to lower token usage."
+        def _show_group(label, items, advice):
+            if not items:
+                return
+            console.print(f"\n  [bold]{label}[/bold] ({len(items)}):")
+            for name, err in items[:5]:
+                short = _short_name(name)
+                console.print(f"    [red]•[/red] {short}: {err[:120]}")
+            if len(items) > 5:
+                console.print(f"    [dim]... and {len(items) - 5} more[/dim]")
+            console.print(f"  [dim]Fix: {advice}[/dim]")
+
+        _show_group(
+            "Quota / rate limit", quota_fails,
+            "Check API billing, reduce --creativity, wait before retrying.",
+        )
+        _show_group(
+            "Network / timeout", network_fails,
+            "Check internet connection. Set GEMINI_TIMEOUT higher or reduce --threads.",
+        )
+        _show_group(
+            "Parse / JSON error", parse_fails,
+            "API returned malformed response. Try different --creativity or engine.",
+        )
+        _show_group(
+            "Other", other_fails,
+            "Check error details above. Run with --verbose for request-level logs.",
         )
 
 
@@ -472,6 +504,7 @@ def translate_epub(
                 total_chars += batch_chars
 
         try:
+            set_current_chapter(_short_name(name))
             translated, _ = translate_html(
                 item.get_content(),
                 engine,
@@ -505,6 +538,7 @@ def translate_epub(
     executor: ThreadPoolExecutor | None = None
     try:
         with progress:
+            set_current_chapter("TOC")
             translate_toc_and_nav(
                 book,
                 engine,

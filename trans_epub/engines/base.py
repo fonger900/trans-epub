@@ -27,12 +27,19 @@ if TYPE_CHECKING:
 # ── Shared HTTP session ────────────────────────────────────────────────────────
 
 _VERBOSE = False
+_CURRENT_CHAPTER = ""  # set by process_chapter for error context
 
 
 def set_verbose(enabled: bool) -> None:
     """Enable or disable verbose request/retry logging."""
     global _VERBOSE
     _VERBOSE = enabled
+
+
+def set_current_chapter(name: str) -> None:
+    """Set current chapter name for error context in retry messages."""
+    global _CURRENT_CHAPTER
+    _CURRENT_CHAPTER = name
 
 
 http_session = requests.Session()
@@ -235,16 +242,18 @@ def call_with_retry(
             resp = request_fn()
             elapsed = time.monotonic() - t0
             if _VERBOSE:
+                ctx = f"[{engine_name}]" if not _CURRENT_CHAPTER else f"[{engine_name} | {_CURRENT_CHAPTER}]"
                 print(
-                    f"\n    [{engine_name}] {label}: "
+                    f"\n    {ctx} {label}: "
                     f"{resp.status_code} in {elapsed:.1f}s",
                     end="",
                     flush=True,
                 )
         except requests.exceptions.RequestException as e:
             wait = min(3 * 2**attempt, 60)
+            ctx = f"[{engine_name}]" if not _CURRENT_CHAPTER else f"[{engine_name} | {_CURRENT_CHAPTER}]"
             print(
-                f"\n    Request error ({label}): {e}. Retrying in {wait}s...",
+                f"\n    {ctx} Request error ({label}): {e}. Retrying in {wait}s...",
                 end=" ",
                 flush=True,
             )
@@ -273,7 +282,7 @@ def call_with_retry(
             if is_quota_issue:
                 wait = min(int(resp.headers.get("Retry-After", 3 * 2**attempt)), 300)
                 print(
-                    f"\n    Quota exceeded ({label}), waiting {wait}s... "
+                    f"\n    [{engine_name}] Quota exceeded ({label}), waiting {wait}s... "
                     f"Check API quota or adjust creativity/char_limit.",
                     end=" ",
                     flush=True,
@@ -281,7 +290,7 @@ def call_with_retry(
             else:
                 wait = min(int(resp.headers.get("Retry-After", 3 * 2**attempt)), 60)
                 print(
-                    f"\n    Rate limited ({label}), waiting {wait}s...",
+                    f"\n    [{engine_name}] Rate limited ({label}), waiting {wait}s...",
                     end=" ",
                     flush=True,
                 )
@@ -296,8 +305,8 @@ def call_with_retry(
             body = str(body)[:2000]
             reason = resp.reason or ""
             raise requests.exceptions.HTTPError(
-                f"{resp.status_code} Client Error: {reason} for url: {resp.url}\n"
-                f"Response body: {body}",
+                f"[{engine_name}] {resp.status_code} ({label}): {reason}\n"
+                f"Body: {body}",
                 response=resp,
             )
 
@@ -307,7 +316,7 @@ def call_with_retry(
             return parse_fn(resp)
         except Exception as e:
             print(
-                f"\n    Parse error ({label}): {e}. Retrying...",
+                f"\n    [{engine_name}] Parse error ({label}): {e}. Retrying...",
                 end=" ",
                 flush=True,
             )
@@ -315,7 +324,9 @@ def call_with_retry(
                 raise
             continue
 
-    raise RuntimeError(f"{engine_name} translation failed: all retries exhausted")
+    raise RuntimeError(
+        f"[{engine_name}] translation failed after {max_attempts} attempts"
+    )
 
 
 def build_prompt(glossary: Glossary | None = None, extra_prompt: str = "") -> str:
