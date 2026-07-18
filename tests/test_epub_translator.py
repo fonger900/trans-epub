@@ -125,7 +125,13 @@ class TestTranslateEpub:
         input_path, output_path = mock_all
         with patch("trans_epub.epub_translator.console.print") as mock_print:
             translate_epub(input_path, output_path, engine="test", list_only=True)
-            mock_print.assert_any_call("1     OEBPS/ch01.xhtml")
+            # New format includes char count column; just verify ch01 appears
+            all_calls = " ".join(
+                str(args[0]) for call in mock_print.call_args_list
+                for args in call if args
+            )
+            assert "OEBPS/ch01.xhtml" in all_calls
+            assert "5" in all_calls  # char count for "Hello"
 
     def test_engine_not_found(self, mock_all, capsys):
         input_path, output_path = mock_all

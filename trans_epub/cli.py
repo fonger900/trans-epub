@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
         "-i",
         help="Spine item numbers to translate, e.g. 1,3,5 or 2-6 or 1,3-5,8 (see --list)",
     )
-    parser.add_argument("--list", "-l", action="store_true")
+    parser.add_argument("--list", "-l", action="store_true", help="List spine items with character counts")
     parser.add_argument(
         "--threads",
         "-t",
@@ -83,6 +83,18 @@ def main(argv: list[str] | None = None) -> int:
         "--fresh",
         action="store_true",
         help="Ignore existing cache, translation fresh",
+    )
+    parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Validate glossary, count chars, estimate cost without translating",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed per-request logging and retry information",
     )
     parser.add_argument(
         "--prompt",
@@ -124,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
         creativity=args.creativity,
         glossary_path=str(args.glossary) if args.glossary else None,
         fresh=args.fresh,
+        dry_run=args.dry_run,
+        verbose=args.verbose,
         extra_prompt=extra_prompt,
     )
     return 0

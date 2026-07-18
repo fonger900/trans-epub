@@ -26,6 +26,15 @@ if TYPE_CHECKING:
 
 # ── Shared HTTP session ────────────────────────────────────────────────────────
 
+_VERBOSE = False
+
+
+def set_verbose(enabled: bool) -> None:
+    """Enable or disable verbose request/retry logging."""
+    global _VERBOSE
+    _VERBOSE = enabled
+
+
 http_session = requests.Session()
 _adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20)
 http_session.mount("https://", _adapter)
@@ -222,7 +231,16 @@ def call_with_retry(
             limiter.wait()
 
         try:
+            t0 = time.monotonic()
             resp = request_fn()
+            elapsed = time.monotonic() - t0
+            if _VERBOSE:
+                print(
+                    f"\n    [{engine_name}] {label}: "
+                    f"{resp.status_code} in {elapsed:.1f}s",
+                    end="",
+                    flush=True,
+                )
         except requests.exceptions.RequestException as e:
             wait = min(3 * 2**attempt, 60)
             print(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -26,12 +27,14 @@ from rich.progress import (
 )
 
 from .config import Glossary, load_glossary
+from .engines.base import set_verbose
 from .html_translator import count_translatable_chars, translate_html
 from .toc import rebuild_toc_links, translate_toc_and_nav
 
 console = Console()
 
 _MAX_NAME_LEN = 30
+_CACHE_HASH_KEY = "__epub_hash__"
 
 
 def _short_name(name: str) -> str:
@@ -71,6 +74,54 @@ def get_spine_items(book: epub.EpubBook) -> list[epub.EpubItem]:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _load_cache(
+    cache_path: Path, input_path: str, fresh: bool
+) -> dict[str, str]:
+    """Load and validate the translation cache.
+
+    Validates JSON integrity and checks that the cache matches the current EPUB.
+    Returns an empty dict if the cache is missing, corrupted, or fresh is True.
+    """
+    if fresh or not cache_path.exists():
+        return {}
+
+    try:
+        data = json.loads(cache_path.read_text())
+    except json.JSONDecodeError:
+        console.print(
+            "[yellow]Warning:[/yellow] Cache file is corrupted, starting fresh"
+        )
+        return {}
+
+    if not isinstance(data, dict):
+        console.print("[yellow]Warning:[/yellow] Invalid cache format, starting fresh")
+        return {}
+
+    # Check EPUB hash to detect changed source files
+    epub_path = Path(input_path)
+    epub_hash = hashlib.md5(epub_path.read_bytes()).hexdigest() if epub_path.exists() else None
+    cached_hash = data.pop(_CACHE_HASH_KEY, None)
+    if cached_hash and cached_hash != epub_hash:
+        console.print(
+            "[yellow]Warning:[/yellow] EPUB has changed since cache was created. "
+            "Use [bold]--fresh[/bold] to re-translate from scratch."
+        )
+        # Keep using the cache but warn — user may still want partial reuse
+
+    return data
+
+
+def _save_cache(cache_path: Path, cache: dict[str, str], input_path: str) -> None:
+    """Save cache with EPUB integrity hash."""
+    epub_path = Path(input_path)
+    if epub_path.exists():
+        epub_hash = hashlib.md5(epub_path.read_bytes()).hexdigest()
+        cache[_CACHE_HASH_KEY] = epub_hash
+    cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+    cache.pop(_CACHE_HASH_KEY, None)
+
 
 
 def _scan_chapters(
@@ -250,13 +301,14 @@ def translate_epub(
     creativity: float | None = None,
     glossary_path: str | None = None,
     fresh: bool = False,
+    dry_run: bool = False,
+    verbose: bool = False,
     extra_prompt: str = "",
 ) -> None:
     """Translate *input_path* from English to Vietnamese and write *output_path*."""
+    set_verbose(verbose)
     cache_path = Path(output_path + ".cache.json")
-    cache: dict[str, str] = (
-        json.loads(cache_path.read_text()) if cache_path.exists() and not fresh else {}
-    )
+    cache: dict[str, str] = _load_cache(cache_path, input_path, fresh)
 
     if engine == "gemini":
         from .engines.gemini import reset_gemini_usage
@@ -286,10 +338,21 @@ def translate_epub(
     items = get_spine_items(book)
 
     if list_only:
-        console.print(f"[bold]{'No.':<5}[/bold] File")
+        console.print("[bold]No.   Chars  File[/bold]")
         console.print("-" * 60)
-        for i, item in enumerate(items, 1):
-            console.print(f"{i:<5} {item.get_name()}")
+        work_items = [(i, item) for i, item in enumerate(items, 1)]
+        jobs = _scan_chapters(work_items, dict(), False)
+        total_chars = 0
+        for job in jobs:
+            console.print(
+                str(job["index"]).ljust(5) + " "
+                + str(job["char_count"]).rjust(10) + "  "
+                + job["name"]
+            )
+            total_chars += job["char_count"]
+        console.print(
+            "\n[bold]Total:[/bold] " + format(total_chars, ",") + " chars"
+        )
         return
 
     work_items = [
@@ -303,6 +366,17 @@ def translate_epub(
     _print_book_info(
         len(items), engine, threads, jobs, glossary=glossary, extra_prompt=extra_prompt
     )
+
+    if dry_run:
+        console.print(
+            "\n[bold green]Dry run complete[/bold green]"
+            " — no translation performed."
+        )
+        console.print(
+            "[dim]Run without [bold]--dry-run[/bold]"
+            " to start translation.[/dim]"
+        )
+        return
 
     cached_chars = sum(j["char_count"] for j in jobs if j["is_cached"])
     if not _confirm_proceed(cached_chars, fresh):
@@ -373,7 +447,7 @@ def translate_epub(
         progress.update(overall_task, advance=1)
         with cache_lock:
             cache[name] = translated.decode("utf-8")
-            cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+            _save_cache(cache_path, cache, input_path)
         item.set_content(translated)
         progress.update(worker_tasks[wid], visible=False)
         with worker_lock:
@@ -397,7 +471,7 @@ def translate_epub(
                 glossary=glossary,
                 extra_prompt=extra_prompt,
             )
-            cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+            _save_cache(cache_path, cache, input_path)
             progress.update(toc_task, advance=1, visible=False)
 
             if threads > 1:
@@ -436,6 +510,6 @@ def translate_epub(
     rebuild_toc_links(book)
     epub.write_epub(output_path, book)
     _repack_epub(output_path)
-    cache_path.write_text(json.dumps(cache, ensure_ascii=False))
+    _save_cache(cache_path, cache, input_path)
 
     _print_results(output_path, engine, total_chars, cached_chars, failed)
