@@ -26,7 +26,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from .config import Glossary, load_glossary
+from .config import Glossary, load_glossary, validate_glossary, scan_glossary_matches
 from .engines.base import set_verbose
 from .html_translator import count_translatable_chars, translate_html
 from .toc import rebuild_toc_links, translate_toc_and_nav
@@ -330,6 +330,9 @@ def translate_epub(
             f"[dim]Glossary:[/dim] {len(glossary.characters)} characters, "
             f"{len(glossary.terms)} terms"
         )
+        warnings = validate_glossary(glossary)
+        for w in warnings:
+            console.print(f"  [yellow]! {w}[/yellow]")
 
     book = epub.read_epub(input_path)
     if not any(isinstance(item, epub.EpubNav) for item in book.items):
@@ -370,6 +373,40 @@ def translate_epub(
     )
 
     if dry_run:
+        # Show glossary match stats if glossary is loaded
+        if glossary and not glossary.is_empty():
+            # Extract plain text from each chapter for scanning
+            from bs4 import BeautifulSoup
+
+            chapter_texts = []
+            for job in jobs:
+                soup = BeautifulSoup(job["item"].get_content(), "xml")
+                chapter_texts.append(soup.get_text())
+
+            matches = scan_glossary_matches(glossary, chapter_texts)
+            if matches:
+                console.print("\n[bold]Glossary match stats:[/bold]")
+                found_any = False
+                for key, count in sorted(matches.items()):
+                    label = key.removeprefix("[character] ")
+                    is_char = key.startswith("[character] ")
+                    tag = "[character]" if is_char else "[term]"
+                    if count > 0:
+                        console.print(
+                            f"  [green]✓[/green] {tag} {label}: "
+                            f"found {count} time(s)"
+                        )
+                        found_any = True
+                    else:
+                        console.print(
+                            f"  [yellow]✗[/yellow] {tag} {label}: "
+                            f"[dim]not found in text[/dim]"
+                        )
+                if not found_any:
+                    console.print(
+                        "  [dim]No glossary terms found in selected chapters.[/dim]"
+                    )
+
         console.print(
             "\n[bold green]Dry run complete[/bold green]"
             " — no translation performed."

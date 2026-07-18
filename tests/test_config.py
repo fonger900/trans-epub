@@ -134,3 +134,94 @@ class TestBuildGlossaryPrompt:
 
     def test_empty_glossary_returns_empty_string(self):
         assert build_glossary_prompt(Glossary()) == ""
+
+
+class TestValidateGlossary:
+    def test_no_warnings_for_valid_glossary(self):
+        from trans_epub.config import validate_glossary
+
+        glossary = Glossary(
+            characters={"John": CharacterEntry(address="anh")},
+            terms={"machine learning": "học máy"},
+        )
+        warnings = validate_glossary(glossary)
+        assert len(warnings) == 0
+
+    def test_warns_on_empty_character(self):
+        from trans_epub.config import validate_glossary
+
+        glossary = Glossary(characters={"Ghost": CharacterEntry()})
+        warnings = validate_glossary(glossary)
+        assert any("Ghost" in w for w in warnings)
+
+    def test_warns_on_empty_term_key(self):
+        from trans_epub.config import validate_glossary
+
+        glossary = Glossary(terms={"": "value"})
+        warnings = validate_glossary(glossary)
+        assert any("empty English" in w for w in warnings)
+
+    def test_warns_on_empty_term_value(self):
+        from trans_epub.config import validate_glossary
+
+        glossary = Glossary(terms={"hello": ""})
+        warnings = validate_glossary(glossary)
+        assert any("hello" in w for w in warnings)
+
+    def test_warns_on_short_term(self):
+        from trans_epub.config import validate_glossary
+
+        glossary = Glossary(terms={"a": "một"})
+        warnings = validate_glossary(glossary)
+        assert any("short" in w.lower() for w in warnings)
+
+    def test_warns_on_character_without_pronouns(self):
+        from trans_epub.config import validate_glossary
+
+        # Character with only a note, no address or self-ref
+        glossary = Glossary(
+            characters={"Bob": CharacterEntry(note="side character")}
+        )
+        warnings = validate_glossary(glossary)
+        assert any("Bob" in w for w in warnings)
+
+
+class TestScanGlossaryMatches:
+    def test_finds_term_in_text(self):
+        from trans_epub.config import scan_glossary_matches
+
+        glossary = Glossary(terms={"hello": "xin chào"})
+        matches = scan_glossary_matches(glossary, ["hello world", "say hello"])
+        assert matches["hello"] == 2
+
+    def test_case_insensitive_matching(self):
+        from trans_epub.config import scan_glossary_matches
+
+        glossary = Glossary(terms={"Hello": "xin chào"})
+        matches = scan_glossary_matches(glossary, ["HELLO world", "Say hello"])
+        assert matches["Hello"] == 2
+
+    def test_term_not_found_returns_zero(self):
+        from trans_epub.config import scan_glossary_matches
+
+        glossary = Glossary(terms={"nonexistent": "không tồn tại"})
+        matches = scan_glossary_matches(glossary, ["some text"])
+        assert matches["nonexistent"] == 0
+
+    def test_finds_character_name(self):
+        from trans_epub.config import scan_glossary_matches
+
+        glossary = Glossary(
+            characters={"Alice": CharacterEntry(address="cô")}
+        )
+        matches = scan_glossary_matches(
+            glossary, ["Alice went to the store", "Bob met Alice"]
+        )
+        assert matches["[character] Alice"] == 2
+
+    def test_empty_text_no_matches(self):
+        from trans_epub.config import scan_glossary_matches
+
+        glossary = Glossary(terms={"hello": "xin chào"})
+        matches = scan_glossary_matches(glossary, [])
+        assert matches["hello"] == 0

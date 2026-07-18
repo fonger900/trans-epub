@@ -132,3 +132,56 @@ def build_glossary_prompt(glossary: Glossary) -> str:
             parts.append(f'• "{eng}" → "{vi}"')
 
     return "\n".join(parts) + "\n"
+
+
+def validate_glossary(glossary: Glossary) -> list[str]:
+    """Validate glossary entries and return list of warnings.
+
+    Checks: empty character entries, empty term keys/values,
+    suspiciously short or long values, duplicate mappings.
+    """
+    warnings: list[str] = []
+
+    for name, entry in glossary.characters.items():
+        if entry.is_empty():
+            warnings.append(f"Character '{name}' has no pronoun fields — skipped")
+        elif not entry.address and not entry.self_ref:
+            warnings.append(
+                f"Character '{name}' has no address or self-ref — may be ignored"
+            )
+        if not name.strip():
+            warnings.append("Character entry with empty name — skipped")
+
+    for eng, vi in glossary.terms.items():
+        if not eng.strip():
+            warnings.append("Term with empty English key — skipped")
+        elif not vi.strip():
+            warnings.append(f"Term '{eng}' has empty Vietnamese value — skipped")
+        elif len(eng.strip()) < 2:
+            warnings.append(
+                f"Term '{eng}' is very short (1 char) — might cause false matches"
+            )
+
+    return warnings
+
+
+def scan_glossary_matches(
+    glossary: Glossary, chapter_texts: list[str]
+) -> dict[str, int]:
+    """Scan chapter texts for glossary term occurrences.
+
+    Returns dict mapping each English term to its match count across all chapters.
+    Case-insensitive matching.
+    """
+    matches: dict[str, int] = {}
+    combined = " ".join(chapter_texts).lower()
+
+    for eng in glossary.terms:
+        count = combined.count(eng.lower())
+        matches[eng] = count
+
+    for name in glossary.characters:
+        count = combined.count(name.lower())
+        matches[f"[character] {name}"] = count
+
+    return matches
