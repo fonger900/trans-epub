@@ -99,7 +99,7 @@ def estimate_gemini_cost(
     Token count assumptions (conservative, actual varies ~10%):
     - English input: ~4 characters per token
     - Vietnamese output: ~3.5 characters per token
-    - LLM prompt overhead: ~3 characters per token (special tokens)
+    - LLM prompt overhead: ~2 characters per token (heavy special tokens)
 
     Supports either a total character count or a list of per-chapter character counts
     to accurately capture repeated system prompt overhead per batch execution.
@@ -110,7 +110,7 @@ def estimate_gemini_cost(
     # Normalize input to a list of sizes for unified batch math
     chapters = [chars] if isinstance(chars, int) else chars
 
-    batch_size = 20_000
+    batch_size = 10_000
     total_input_tokens = 0.0
     total_output_tokens = 0.0
 
@@ -119,8 +119,8 @@ def estimate_gemini_cost(
             continue
         num_batches = max(1, (c_chars + batch_size - 1) // batch_size)
 
-        # English: ~4 chars/token. Prompt overhead: ~3 chars/token.
-        total_input_tokens += (c_chars / 4.0) + (prompt_chars / 3.0) * num_batches
+        # English: ~4 chars/token. Prompt: ~2 chars/token (special tokens heavy).
+        total_input_tokens += (c_chars / 4.0) + (prompt_chars / 2.0) * num_batches
 
         # Vietnamese: ~3.5 chars/token (similar to English, not worse)
         total_output_tokens += c_chars / 3.5
@@ -218,7 +218,7 @@ def gemini_translate(
 ENGINES["gemini"] = EngineConfig(
     name="gemini",
     translate=gemini_translate,
-    char_limit=20_000,
+    char_limit=10_000,
     elem_limit=50,
     delay=0,
     limiter=RateLimiter(rpm=15),

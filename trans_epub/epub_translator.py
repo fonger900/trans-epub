@@ -216,7 +216,7 @@ def _print_book_info(
         model = os.environ.get("GEMINI_MODEL") or ""
         if "lite" in model.lower():
             batch_count = sum(
-                max(1, (c + 20_000 - 1) // 20_000)
+                max(1, (c + 10_000 - 1) // 10_000)
                 for c in pending_chapters if c > 0
             )
             if batch_count > 15:
