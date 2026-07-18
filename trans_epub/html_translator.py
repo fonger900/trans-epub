@@ -156,19 +156,26 @@ def translate_html(
     progress_cb: ProgressCallback | None = None,
     glossary: Glossary | None = None,
     extra_prompt: str = "",
+    cached_soup: BeautifulSoup | None = None,
+    cached_nodes: list[Tag] | None = None,
+    cached_attrs: list | None = None,
 ) -> tuple[bytes, int]:
     """Translate all translatable text nodes in *html_bytes*.
 
     Returns ``(translated_html_bytes, total_char_count)``.
 
-    If *progress_cb* is provided, it is called after each API batch completes
-    with ``(batch_number, total_batches, batch_chars)`` so the caller can
-    display per-chapter progress.
+    If *cached_soup*/*cached_nodes*/*cached_attrs* are provided from
+    _scan_chapters pre-parsing, skips redundant BeautifulSoup parsing.
     """
     cfg = ENGINES[engine]
-    soup = BeautifulSoup(html_bytes, "lxml-xml")
-    nodes = _get_translatable_nodes(soup)
-    attrs = _collect_translatable_attributes(soup, nodes)
+    if cached_soup is not None and cached_nodes is not None:
+        soup = cached_soup
+        nodes = cached_nodes
+        attrs = cached_attrs if cached_attrs is not None else []
+    else:
+        soup = BeautifulSoup(html_bytes, "lxml-xml")
+        nodes = _get_translatable_nodes(soup)
+        attrs = _collect_translatable_attributes(soup, nodes)
     if not nodes and not attrs:
         return html_bytes, 0
 

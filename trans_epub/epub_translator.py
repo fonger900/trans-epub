@@ -29,7 +29,7 @@ from rich.progress import (
 
 from .config import Glossary, load_glossary, validate_glossary, scan_glossary_matches
 from .engines.base import set_verbose, set_current_chapter, set_current_chapter_info
-from .html_translator import count_translatable_chars, translate_html
+from .html_translator import translate_html
 from .toc import rebuild_toc_links, translate_toc_and_nav
 
 console = Console()
@@ -133,12 +133,29 @@ def _scan_chapters(
 ) -> list[dict[str, Any]]:
     """Scan chapters to pre-calculate metrics and cache statuses.
 
-    Prevents redundant HTML parsing and lock-heavy cache checks during execution[cite: 3].
+    Also pre-parses each chapter's HTML and caches the parsed soup/nodes/attrs
+    so translate_html can skip re-parsing later.
     """
+    from bs4 import BeautifulSoup
+
+    from .html_translator import (
+        _collect_translatable_attributes,
+        _extract_text_with_emphasis,
+        _get_translatable_nodes,
+    )
+
     jobs = []
     for i, item in work_items:
         name = item.get_name()
-        char_count = count_translatable_chars(item.get_content())
+        content = item.get_content()
+
+        # Parse once; cache the parsed data for later reuse by translate_html
+        soup = BeautifulSoup(content, "lxml-xml")
+        nodes = _get_translatable_nodes(soup)
+        attrs = _collect_translatable_attributes(soup, nodes)
+        char_count = sum(len(_extract_text_with_emphasis(n)) for n in nodes)
+        char_count += sum(len(val) for _, _, val in attrs)
+
         is_cached = name in cache and not fresh
 
         jobs.append(
@@ -149,6 +166,9 @@ def _scan_chapters(
                 "char_count": char_count,
                 "is_cached": is_cached,
                 "cached_content": cache.get(name) if is_cached else None,
+                "_soup": soup,
+                "_nodes": nodes,
+                "_attrs": attrs,
             }
         )
     return jobs
@@ -538,6 +558,9 @@ def translate_epub(
                 progress_cb=on_progress,
                 glossary=glossary,
                 extra_prompt=extra_prompt,
+                cached_soup=job.get("_soup"),
+                cached_nodes=job.get("_nodes"),
+                cached_attrs=job.get("_attrs"),
             )
         except Exception as e:
             progress.update(worker_tasks[wid], visible=False)
