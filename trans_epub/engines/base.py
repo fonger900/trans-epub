@@ -30,6 +30,26 @@ _VERBOSE = False
 _CURRENT_CHAPTER = ""  # set by process_chapter for error context
 _CURRENT_CHAPTER_INFO = ""  # extra info like batch number
 
+# Cancellation support — allows Ctrl+C to interrupt retry loops immediately
+_cancel_event: threading.Event | None = None
+
+
+def reset_cancel_event() -> None:
+    """Create a fresh cancel event at start of each translation run."""
+    global _cancel_event
+    _cancel_event = threading.Event()
+
+
+def request_cancel() -> None:
+    """Signal all in-flight retry loops to abort immediately."""
+    if _cancel_event:
+        _cancel_event.set()
+
+
+def is_cancelled() -> bool:
+    """Check if user requested cancellation."""
+    return _cancel_event is not None and _cancel_event.is_set()
+
 
 def set_verbose(enabled: bool) -> None:
     """Enable or disable verbose request/retry logging."""
@@ -249,6 +269,10 @@ def call_with_retry(
         return engine_name
 
     for attempt in range(max_attempts):
+        # Check for cancellation before each attempt
+        if is_cancelled():
+            raise KeyboardInterrupt("Translation cancelled by user")
+
         label = f"attempt {attempt + 1}/{max_attempts}"
 
         # Proactive: wait for rate limit slot before making request
@@ -275,7 +299,12 @@ def call_with_retry(
             )
             if attempt == max_attempts - 1:
                 raise
-            time.sleep(wait)
+            # Interruptible sleep — breaks immediately on Ctrl+C
+            if _cancel_event:
+                if _cancel_event.wait(timeout=wait):
+                    raise KeyboardInterrupt("Translation cancelled by user")
+            else:
+                time.sleep(wait)
             continue
 
         if resp.status_code == 429 or resp.status_code == 403:
@@ -310,7 +339,12 @@ def call_with_retry(
                     end=" ",
                     flush=True,
                 )
-            time.sleep(wait)
+            # Interruptible sleep
+            if _cancel_event:
+                if _cancel_event.wait(timeout=wait):
+                    raise KeyboardInterrupt("Translation cancelled by user")
+            else:
+                time.sleep(wait)
             continue
 
         if 400 <= resp.status_code < 500 and resp.status_code != 429:

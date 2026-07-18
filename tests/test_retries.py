@@ -58,22 +58,32 @@ def test_call_with_retry_on_network_error():
 
 def test_call_with_retry_on_429():
     """Test that call_with_retry handles 429 rate limiting."""
-    rate_limited_resp = Mock()
-    rate_limited_resp.status_code = 429
-    rate_limited_resp.headers = {"Retry-After": "1"}
+    from trans_epub.engines.base import _cancel_event
 
-    success_resp = _make_success_resp()
+    # Reset cancel event in case previous test left it set
+    old_cancel = _cancel_event
+    import trans_epub.engines.base as base_mod
 
-    mock_request_fn = Mock(side_effect=[rate_limited_resp, success_resp])
+    base_mod._cancel_event = None
+    try:
+        rate_limited_resp = Mock()
+        rate_limited_resp.status_code = 429
+        rate_limited_resp.headers = {"Retry-After": "1"}
 
-    with patch("time.sleep") as mock_sleep:
-        result = call_with_retry(
-            "TestEngine", mock_request_fn, _parse_fn, max_attempts=3
-        )
+        success_resp = _make_success_resp()
 
-    assert result == ["Xin chào"]
-    assert mock_request_fn.call_count == 2
-    mock_sleep.assert_called_once_with(1)
+        mock_request_fn = Mock(side_effect=[rate_limited_resp, success_resp])
+
+        with patch("time.sleep") as mock_sleep:
+            result = call_with_retry(
+                "TestEngine", mock_request_fn, _parse_fn, max_attempts=3
+            )
+
+        assert result == ["Xin chào"]
+        assert mock_request_fn.call_count == 2
+        mock_sleep.assert_called_once_with(1)
+    finally:
+        base_mod._cancel_event = old_cancel
 
 
 def test_call_with_retry_on_json_error():

@@ -28,7 +28,13 @@ from rich.progress import (
 )
 
 from .config import Glossary, load_glossary, validate_glossary, scan_glossary_matches
-from .engines.base import set_verbose, set_current_chapter, set_current_chapter_info
+from .engines.base import (
+    set_verbose,
+    set_current_chapter,
+    set_current_chapter_info,
+    reset_cancel_event,
+    request_cancel,
+)
 from .html_translator import translate_html
 from .toc import rebuild_toc_links, translate_toc_and_nav
 
@@ -381,6 +387,7 @@ def translate_epub(
 ) -> None:
     """Translate *input_path* from English to Vietnamese and write *output_path*."""
     set_verbose(verbose)
+    reset_cancel_event()
     if rpm is not None:
         from .engines.base import ENGINES, RateLimiter
 
@@ -639,6 +646,7 @@ def translate_epub(
                         restore_skipped(i, item)
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled by user[/yellow]")
+        request_cancel()
         # Suppress subsequent Ctrl+C during cleanup to prevent
         # ThreadPoolExecutor atexit traceback on shutdown.
         signal.signal(signal.SIGINT, lambda *_: None)
