@@ -485,7 +485,30 @@ def translate_epub(
     )
 
     if dry_run:
-        # Show glossary match stats if glossary is loaded
+        # Cost estimate (repeated here for clarity, also in book info above)
+        pending_chapters = [j["char_count"] for j in jobs if not j["is_cached"]]
+        total_pending = sum(pending_chapters)
+        if engine == "gemini" and total_pending > 0:
+            from .engines.base import build_prompt
+            from .engines.gemini import estimate_gemini_cost
+
+            prompt_chars = len(build_prompt(glossary, extra_prompt))
+            est = estimate_gemini_cost(pending_chapters, prompt_chars=prompt_chars)
+            console.print(
+                f"\n[bold]Estimated cost:[/bold] ${est:.4f}"
+                f" ([dim]{total_pending:,} pending chars[/dim])"
+            )
+        elif total_pending > 0:
+            console.print(
+                f"\n[bold]Pending:[/bold] {total_pending:,} chars across"
+                f" {len(pending_chapters)} chapter(s)"
+            )
+        else:
+            total_cached = sum(j["char_count"] for j in jobs if j["is_cached"])
+            console.print(
+                f"\n[bold green]All {total_cached:,} chars cached[/bold green]"
+                f" — no translation needed."
+            )
         if glossary and not glossary.is_empty():
             # Extract plain text from each chapter for scanning
             from bs4 import BeautifulSoup
