@@ -3,10 +3,8 @@
 import json
 import threading
 import time
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from trans_epub.engines.base import RateLimiter
 from trans_epub.epub_translator import _load_cache, _save_cache, _CACHE_HASH_KEY

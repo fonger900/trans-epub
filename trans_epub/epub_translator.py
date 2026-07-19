@@ -321,11 +321,10 @@ def _print_results(
             calls = stats["api_calls"]
             input_pct = prompt_tok / total_tok * 100 if total_tok else 0
             console.print(
-                f"\n[bold]Token analysis[/bold] [dim](use for future estimates)[/dim]:"
+                "\n[bold]Token analysis[/bold] [dim](use for future estimates)[/dim]:"
             )
             console.print(
-                f"  Tokens per char: [bold]{ratio:.2f}[/bold]"
-                f"  |  API calls: {calls}"
+                f"  Tokens per char: [bold]{ratio:.2f}[/bold]  |  API calls: {calls}"
             )
             console.print(
                 f"  Avg tokens/call: {avg_call:,.0f}"

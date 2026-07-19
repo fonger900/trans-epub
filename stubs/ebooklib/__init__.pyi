@@ -1,4 +1,3 @@
-from typing import Any
 
 from ebooklib import epub as epub
 
