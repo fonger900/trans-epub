@@ -258,6 +258,7 @@ def call_with_retry(
         limiter: Optional RateLimiter — if given, ``wait()`` is called before
                  each request to stay under RPM limits.
     """
+
     # Build context label for retry messages
     def _ctx():
         chapter = _CURRENT_CHAPTER
@@ -285,8 +286,7 @@ def call_with_retry(
             elapsed = time.monotonic() - t0
             if _VERBOSE:
                 print(
-                    f"\n    [{_ctx()}] {label}: "
-                    f"{resp.status_code} in {elapsed:.1f}s",
+                    f"\n    [{_ctx()}] {label}: {resp.status_code} in {elapsed:.1f}s",
                     end="",
                     flush=True,
                 )
@@ -355,8 +355,7 @@ def call_with_retry(
             body = str(body)[:2000]
             reason = resp.reason or ""
             raise requests.exceptions.HTTPError(
-                f"[{_ctx()}] {resp.status_code} ({label}): {reason}\n"
-                f"Body: {body}",
+                f"[{_ctx()}] {resp.status_code} ({label}): {reason}\nBody: {body}",
                 response=resp,
             )
 
@@ -374,9 +373,7 @@ def call_with_retry(
                 raise
             continue
 
-    raise RuntimeError(
-        f"[{_ctx()}] translation failed after {max_attempts} attempts"
-    )
+    raise RuntimeError(f"[{_ctx()}] translation failed after {max_attempts} attempts")
 
 
 def build_prompt(glossary: Glossary | None = None, extra_prompt: str = "") -> str:

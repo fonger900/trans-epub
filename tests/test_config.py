@@ -179,9 +179,7 @@ class TestValidateGlossary:
         from trans_epub.config import validate_glossary
 
         # Character with only a note, no address or self-ref
-        glossary = Glossary(
-            characters={"Bob": CharacterEntry(note="side character")}
-        )
+        glossary = Glossary(characters={"Bob": CharacterEntry(note="side character")})
         warnings = validate_glossary(glossary)
         assert any("Bob" in w for w in warnings)
 
@@ -211,9 +209,7 @@ class TestScanGlossaryMatches:
     def test_finds_character_name(self):
         from trans_epub.config import scan_glossary_matches
 
-        glossary = Glossary(
-            characters={"Alice": CharacterEntry(address="cô")}
-        )
+        glossary = Glossary(characters={"Alice": CharacterEntry(address="cô")})
         matches = scan_glossary_matches(
             glossary, ["Alice went to the store", "Bob met Alice"]
         )

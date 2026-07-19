@@ -16,6 +16,7 @@ from trans_epub.toc import _is_toc_candidate, _toc_href_to_relative
 
 # ── _load_cache ──────────────────────────────────────────────────────────────
 
+
 class TestLoadCache:
     def test_returns_empty_when_fresh(self, tmp_path):
         cache_path = tmp_path / "test.cache.json"
@@ -86,6 +87,7 @@ class TestLoadCache:
 
 
 # ── _save_cache ──────────────────────────────────────────────────────────────
+
 
 class TestSaveCache:
     def test_stores_hash_when_epub_exists(self, tmp_path):
@@ -162,6 +164,7 @@ class TestSaveCache:
 
 # ── RateLimiter ───────────────────────────────────────────────────────────────
 
+
 class TestRateLimiter:
     def test_first_call_does_not_sleep(self):
         limiter = RateLimiter(rpm=60)  # 1 per second
@@ -215,6 +218,7 @@ class TestRateLimiter:
 
 
 # ── count_translatable_chars ─────────────────────────────────────────────────
+
 
 class TestCountTranslatableChars:
     def test_basic_paragraph(self):
@@ -273,6 +277,7 @@ class TestCountTranslatableChars:
 
 
 # ── TOC helpers ──────────────────────────────────────────────────────────────
+
 
 class TestTocHrefToRelative:
     def test_matches_toc_dir_prefix(self):

@@ -130,8 +130,10 @@ class TestTranslateEpub:
             translate_epub(input_path, output_path, engine="test", list_only=True)
             # New format includes char count column; just verify ch01 appears
             all_calls = " ".join(
-                str(args[0]) for call in mock_print.call_args_list
-                for args in call if args
+                str(args[0])
+                for call in mock_print.call_args_list
+                for args in call
+                if args
             )
             assert "OEBPS/ch01.xhtml" in all_calls
             assert "5" in all_calls  # char count for "Hello"
@@ -147,16 +149,10 @@ class TestTranslateEpub:
         """Dry run should scan and report but skip translation entirely."""
         input_path, output_path = mock_all
         with (
-            patch(
-                "trans_epub.epub_translator.translate_toc_and_nav"
-            ) as mock_toc,
-            patch(
-                "trans_epub.epub_translator.translate_html"
-            ) as mock_html,
+            patch("trans_epub.epub_translator.translate_toc_and_nav") as mock_toc,
+            patch("trans_epub.epub_translator.translate_html") as mock_html,
         ):
-            translate_epub(
-                input_path, output_path, engine="test", dry_run=True
-            )
+            translate_epub(input_path, output_path, engine="test", dry_run=True)
 
         mock_toc.assert_not_called()
         mock_html.assert_not_called()
@@ -166,9 +162,7 @@ class TestTranslateEpub:
         """--verbose should enable verbose mode in base module."""
         input_path, output_path = mock_all
         with patch("trans_epub.epub_translator.set_verbose") as mock_set:
-            translate_epub(
-                input_path, output_path, engine="test", verbose=True
-            )
+            translate_epub(input_path, output_path, engine="test", verbose=True)
             mock_set.assert_called_once_with(True)
 
     def test_cache_survives_chapter_failure(self, mock_all, tmp_path):

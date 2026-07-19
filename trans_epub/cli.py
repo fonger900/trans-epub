@@ -63,7 +63,12 @@ def main(argv: list[str] | None = None) -> int:
         "--retranslate",
         help="Spine item numbers to re-translate even if cached, e.g. 1,3 or 2-4",
     )
-    parser.add_argument("--list", "-l", action="store_true", help="List spine items with character counts")
+    parser.add_argument(
+        "--list",
+        "-l",
+        action="store_true",
+        help="List spine items with character counts",
+    )
     parser.add_argument(
         "--threads",
         "-t",

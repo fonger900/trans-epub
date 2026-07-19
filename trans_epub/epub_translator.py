@@ -31,7 +31,6 @@ from .config import Glossary, load_glossary, validate_glossary, scan_glossary_ma
 from .engines.base import (
     set_verbose,
     set_current_chapter,
-    set_current_chapter_info,
     reset_cancel_event,
     request_cancel,
 )
@@ -83,9 +82,7 @@ def get_spine_items(book: epub.EpubBook) -> list[epub.EpubItem]:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _load_cache(
-    cache_path: Path, input_path: str, fresh: bool
-) -> dict[str, str]:
+def _load_cache(cache_path: Path, input_path: str, fresh: bool) -> dict[str, str]:
     """Load and validate the translation cache.
 
     Validates JSON integrity and checks that the cache matches the current EPUB.
@@ -108,7 +105,9 @@ def _load_cache(
 
     # Check EPUB hash to detect changed source files
     epub_path = Path(input_path)
-    epub_hash = hashlib.md5(epub_path.read_bytes()).hexdigest() if epub_path.exists() else None
+    epub_hash = (
+        hashlib.md5(epub_path.read_bytes()).hexdigest() if epub_path.exists() else None
+    )
     cached_hash = data.pop(_CACHE_HASH_KEY, None)
     if cached_hash and cached_hash != epub_hash:
         console.print(
@@ -131,7 +130,6 @@ def _save_cache(cache_path: Path, cache: dict[str, str], input_path: str) -> Non
     tmp_path.write_text(json.dumps(cache, ensure_ascii=False))
     os.replace(tmp_path, cache_path)
     cache.pop(_CACHE_HASH_KEY, None)
-
 
 
 def _scan_chapters(
@@ -226,8 +224,7 @@ def _print_book_info(
         model = os.environ.get("GEMINI_MODEL") or ""
         if "lite" in model.lower():
             batch_count = sum(
-                max(1, (c + 10_000 - 1) // 10_000)
-                for c in pending_chapters if c > 0
+                max(1, (c + 10_000 - 1) // 10_000) for c in pending_chapters if c > 0
             )
             if batch_count > 15:
                 est_min = batch_count / 15
@@ -325,11 +322,29 @@ def _print_results(
         other_fails = []
         for name, err in failed:
             err_lower = err.lower()
-            if any(kw in err_lower for kw in ("quota", "limit exceeded", "daily limit",
-                    "insufficient quota", "billing", "payment required", "rate limit")):
+            if any(
+                kw in err_lower
+                for kw in (
+                    "quota",
+                    "limit exceeded",
+                    "daily limit",
+                    "insufficient quota",
+                    "billing",
+                    "payment required",
+                    "rate limit",
+                )
+            ):
                 quota_fails.append((name, err))
-            elif any(kw in err_lower for kw in ("timeout", "connection", "network",
-                    "reset by peer", "refused")):
+            elif any(
+                kw in err_lower
+                for kw in (
+                    "timeout",
+                    "connection",
+                    "network",
+                    "reset by peer",
+                    "refused",
+                )
+            ):
                 network_fails.append((name, err))
             elif "parse" in err_lower or "json" in err_lower:
                 parse_fails.append((name, err))
@@ -353,19 +368,23 @@ def _print_results(
             console.print(f"  [dim]Fix: {advice}[/dim]")
 
         _show_group(
-            "Quota / rate limit", quota_fails,
+            "Quota / rate limit",
+            quota_fails,
             "Check API billing, reduce --creativity, wait before retrying.",
         )
         _show_group(
-            "Network / timeout", network_fails,
+            "Network / timeout",
+            network_fails,
             "Check internet connection. Set GEMINI_TIMEOUT higher or reduce --threads.",
         )
         _show_group(
-            "Parse / JSON error", parse_fails,
+            "Parse / JSON error",
+            parse_fails,
             "API returned malformed response. Try different --creativity or engine.",
         )
         _show_group(
-            "Other", other_fails,
+            "Other",
+            other_fails,
             "Check error details above. Run with --verbose for request-level logs.",
         )
 
@@ -441,14 +460,14 @@ def translate_epub(
         total_chars = 0
         for job in jobs:
             console.print(
-                str(job["index"]).ljust(5) + " "
-                + str(job["char_count"]).rjust(10) + "  "
+                str(job["index"]).ljust(5)
+                + " "
+                + str(job["char_count"]).rjust(10)
+                + "  "
                 + job["name"]
             )
             total_chars += job["char_count"]
-        console.print(
-            "\n[bold]Total:[/bold] " + format(total_chars, ",") + " chars"
-        )
+        console.print("\n[bold]Total:[/bold] " + format(total_chars, ",") + " chars")
         return
 
     work_items = [
@@ -486,8 +505,7 @@ def translate_epub(
                     tag = "[character]" if is_char else "[term]"
                     if count > 0:
                         console.print(
-                            f"  [green]✓[/green] {tag} {label}: "
-                            f"found {count} time(s)"
+                            f"  [green]✓[/green] {tag} {label}: found {count} time(s)"
                         )
                         found_any = True
                     else:
@@ -501,12 +519,10 @@ def translate_epub(
                     )
 
         console.print(
-            "\n[bold green]Dry run complete[/bold green]"
-            " — no translation performed."
+            "\n[bold green]Dry run complete[/bold green] — no translation performed."
         )
         console.print(
-            "[dim]Run without [bold]--dry-run[/bold]"
-            " to start translation.[/dim]"
+            "[dim]Run without [bold]--dry-run[/bold] to start translation.[/dim]"
         )
         return
 
@@ -614,8 +630,7 @@ def translate_epub(
             if threads > 1:
                 executor = ThreadPoolExecutor(max_workers=threads)
                 future_map = {
-                    executor.submit(process_chapter, job): job["name"]
-                    for job in jobs
+                    executor.submit(process_chapter, job): job["name"] for job in jobs
                 }
                 for i, item in enumerate(items, 1):
                     if only_chapters and i not in only_chapters:
@@ -637,13 +652,15 @@ def translate_epub(
                 single_executor = ThreadPoolExecutor(max_workers=1)
                 for job in jobs:
                     try:
-                        single_executor.submit(
-                            process_chapter, job
-                        ).result(timeout=chapter_timeout)
+                        single_executor.submit(process_chapter, job).result(
+                            timeout=chapter_timeout
+                        )
                     except KeyboardInterrupt:
                         raise
                     except TimeoutError:
-                        failed.append((job["name"], f"timed out after {chapter_timeout}s"))
+                        failed.append(
+                            (job["name"], f"timed out after {chapter_timeout}s")
+                        )
                     except Exception as e:
                         failed.append((job["name"], str(e)))
                 for i, item in enumerate(items, 1):

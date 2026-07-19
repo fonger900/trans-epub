@@ -33,7 +33,9 @@ ProgressCallback = Callable[[int, int, int], None]
 _STRIP_TAGS_RE = re.compile(rf"<(?!/?(?:{'|'.join(EMPHASIS_TAGS)})\b)[^>]+>", re.I)
 
 
-def _should_preserve(tag: Tag, preserve_tags: set[str], preserve_classes: set[str]) -> bool:
+def _should_preserve(
+    tag: Tag, preserve_tags: set[str], preserve_classes: set[str]
+) -> bool:
     """Check if *tag* (or any of its ancestors) should be preserved."""
     for current in [tag, *tag.parents]:
         if getattr(current, "name", None) in preserve_tags:
@@ -86,9 +88,7 @@ def _extract_text_with_emphasis(node: Tag) -> str:
     return "".join(parts).strip()
 
 
-def _collect_translatable_attributes(
-    soup: BeautifulSoup, nodes: list[Tag]
-) -> list:
+def _collect_translatable_attributes(soup: BeautifulSoup, nodes: list[Tag]) -> list:
     """Collect translatable attribute values from within text nodes.
 
     Returns a list of (tag, attr_name, attr_value) tuples.

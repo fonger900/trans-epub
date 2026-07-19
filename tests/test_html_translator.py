@@ -35,6 +35,8 @@ class TestWithRealEpub:
         assert isinstance(result, bytes)
         assert b"VI:" in result
         assert b'class="calibre1"' in result or b'class="calibre_3"' in result
+
+
 class TestPreserveBlocks:
     """Verifies non-translatable blocks are not touched."""
 
@@ -65,7 +67,9 @@ class TestPreserveBlocks:
 class TestAttributeTranslation:
     """HTML attribute translation (alt, title, aria-label, placeholder)."""
 
-    def test_translates_img_alt_inside_paragraph(self, mock_engines, mock_engine_config):
+    def test_translates_img_alt_inside_paragraph(
+        self, mock_engines, mock_engine_config
+    ):
         html = (
             b"<html><body>"
             b'<p>Look at <img alt="the red door" src="door.jpg"/> and smile</p>'
@@ -123,7 +127,9 @@ class TestAttributeTranslation:
 
         assert 'aria-label="ghi chu quan trong"' in result_str
 
-    def test_skips_attributes_in_preserved_blocks(self, mock_engines, mock_engine_config):
+    def test_skips_attributes_in_preserved_blocks(
+        self, mock_engines, mock_engine_config
+    ):
         html = (
             b"<html><body>"
             b'<div class="note">'
@@ -167,7 +173,7 @@ class TestAttributeTranslation:
     def test_char_count_includes_attributes(self, mock_engines, mock_engine_config):
         html = (
             b"<html><body>"
-            b'<p>Hello</p>'
+            b"<p>Hello</p>"
             b'<img alt="a photo of a cat" src="cat.jpg"/>'
             b"</body></html>"
         )
@@ -180,13 +186,11 @@ class TestAttributeTranslation:
         # "Hello" (5) + "a photo of a cat" (16) = 21
         assert char_count == 21
 
-    def test_duplicate_attributes_only_translated_once(self, mock_engines, mock_engine_config):
+    def test_duplicate_attributes_only_translated_once(
+        self, mock_engines, mock_engine_config
+    ):
         """Same img tag scanned twice (via node and standalone) should only translate once."""
-        html = (
-            b"<html><body>"
-            b'<p><img alt="unique" src="x.jpg"/></p>'
-            b"</body></html>"
-        )
+        html = b'<html><body><p><img alt="unique" src="x.jpg"/></p></body></html>'
 
         seen_count = 0
 
