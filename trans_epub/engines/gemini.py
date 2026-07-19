@@ -140,16 +140,13 @@ def estimate_gemini_cost(
             continue
         num_batches = max(1, (c_chars + batch_size - 1) // batch_size)
 
-        # Content text: ~4 chars/token (plain English)
-        content_tokens = c_chars / 4.0
-
-        # System prompt per batch: prompt text + JSON wrapping + text list.
+        # System prompt per batch: prompt text + JSON wrapping + content text.
         # JSON + instructions tokenize poorly (~2 chars/token).
-        # Full prompt = prompt_chars + batch_chars_per_batch (the JSON payload).
+        # Full payload = prompt_chars + (c_chars / num_batches).
         batch_chars = c_chars / num_batches
         prompt_tokens_per_batch = (prompt_chars + batch_chars) / 2.0
 
-        total_input_tokens += content_tokens + (prompt_tokens_per_batch * num_batches)
+        total_input_tokens += prompt_tokens_per_batch * num_batches
 
         # Vietnamese output: ~1.9 chars/token (diacritics expensive)
         total_output_tokens += c_chars / 1.9
