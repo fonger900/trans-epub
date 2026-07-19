@@ -119,30 +119,43 @@ def _resolve_pricing(model: str) -> tuple[float, float]:
 
 
 def estimate_gemini_cost(
-    chars: int | list[int], model: str | None = None, prompt_chars: int = 0
+    chars: int | list[int],
+    model: str | None = None,
+    prompt_chars: int = 0,
+    avg_element_chars: float = 200.0,
 ) -> float:
     """Estimate USD cost for translating English text to Vietnamese.
 
     Rough estimate. Actual cost varies with glossary size, extra prompt,
-    creativity, and retries. Use --verbose to see real token usage after run.
+    creativity, retries, and elem_limit splitting.
+    Use --verbose to see real token usage after run for calibration.
+
+    avg_element_chars: estimated average chars per translatable element.
+    Used with elem_limit=50 to compute effective batch size.
+    Default 200 means elem_limit has no effect (50×200 = 10K = char_limit).
+    Lower values (e.g. 80 for short dialogue) produce more batches.
     """
     model = model or os.environ.get("GEMINI_MODEL") or _DEFAULT_MODEL
     input_price, output_price = _resolve_pricing(model)
 
     chapters = [chars] if isinstance(chars, int) else chars
 
-    batch_size = 10_000
+    ELEM_LIMIT = 50
+    char_limit = 10_000
+    # Effective batch size = min(char_limit, elem_limit × avg chars per element)
+    effective_batch = min(char_limit, ELEM_LIMIT * int(avg_element_chars))
+    effective_batch = max(1000, effective_batch)  # floor at 1K chars
+
     total_input_tokens = 0.0
     total_output_tokens = 0.0
 
     for c_chars in chapters:
         if c_chars == 0:
             continue
-        num_batches = max(1, (c_chars + batch_size - 1) // batch_size)
+        num_batches = max(1, int((c_chars + effective_batch - 1) // effective_batch))
 
-        # System prompt per batch: prompt text + JSON wrapping + content text.
+        # Full payload per batch: prompt text + JSON wrapping + content text.
         # JSON + instructions tokenize poorly (~2 chars/token).
-        # Full payload = prompt_chars + (c_chars / num_batches).
         batch_chars = c_chars / num_batches
         prompt_tokens_per_batch = (prompt_chars + batch_chars) / 2.0
 

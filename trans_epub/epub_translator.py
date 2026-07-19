@@ -212,7 +212,16 @@ def _print_book_info(
         from .engines.gemini import estimate_gemini_cost
 
         prompt_chars = len(build_prompt(glossary, extra_prompt))
-        est = estimate_gemini_cost(pending_chapters, prompt_chars=prompt_chars)
+        # Compute average chars per element from scanned nodes
+        total_elems = sum(
+            len(j.get("_nodes", [])) for j in jobs if not j["is_cached"]
+        )
+        avg_elem = (
+            total_pending / total_elems if total_elems > 0 else 200
+        )
+        est = estimate_gemini_cost(
+            pending_chapters, prompt_chars=prompt_chars, avg_element_chars=avg_elem
+        )
         if est > 0:
             console.print(f"[bold]Est. cost:[/bold] ${est:.4f}")
         else:
@@ -512,7 +521,15 @@ def translate_epub(
             from .engines.gemini import estimate_gemini_cost
 
             prompt_chars = len(build_prompt(glossary, extra_prompt))
-            est = estimate_gemini_cost(pending_chapters, prompt_chars=prompt_chars)
+            total_elems = sum(
+                len(j.get("_nodes", [])) for j in jobs if not j["is_cached"]
+            )
+            avg_elem = (
+                total_pending / total_elems if total_elems > 0 else 200
+            )
+            est = estimate_gemini_cost(
+                pending_chapters, prompt_chars=prompt_chars, avg_element_chars=avg_elem
+            )
             console.print(
                 f"\n[bold]Estimated cost:[/bold] ${est:.4f}"
                 f" ([dim]{total_pending:,} pending chars[/dim])"
