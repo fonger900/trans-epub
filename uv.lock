@@ -338,7 +338,7 @@ wheels = [
 
 [[package]]
 name = "trans-epub"
-version = "1.5.2"
+version = "1.5.4"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
