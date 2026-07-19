@@ -96,38 +96,42 @@ def estimate_gemini_cost(
 ) -> float:
     """Estimate USD cost for translating English text to Vietnamese.
 
-    Empirical ratios measured from trans-epub runs on real books:
-    - English content: ~2.26 chars/token (with system prompt overhead)
-    - System prompt: ~1200 tokens fixed per batch (full JSON payload)
-    - Vietnamese output: ~1.90 chars/token (diacritics expensive in tokenizer)
-
-    These are empirical, not theoretical. Actual varies ~5%.
+    Rough estimate. Actual cost varies with glossary size, extra prompt,
+    creativity, and retries. Use --verbose to see real token usage after run.
     """
     model = model or os.environ.get("GEMINI_MODEL") or _DEFAULT_MODEL
     input_price, output_price = _resolve_pricing(model)
 
-    # Normalize input to a list of sizes for unified batch math
     chapters = [chars] if isinstance(chars, int) else chars
 
     batch_size = 10_000
     total_input_tokens = 0.0
     total_output_tokens = 0.0
 
-    # System prompt overhead measured empirically from real runs (~1200 tokens/batch)
-    PROMPT_TOKENS_PER_BATCH = 1200
-
     for c_chars in chapters:
         if c_chars == 0:
             continue
         num_batches = max(1, (c_chars + batch_size - 1) // batch_size)
 
-        total_input_tokens += (c_chars / 2.26) + (PROMPT_TOKENS_PER_BATCH * num_batches)
+        # Content text: ~4 chars/token (plain English)
+        content_tokens = c_chars / 4.0
 
-        total_output_tokens += c_chars / 1.90
+        # System prompt per batch: prompt text + JSON wrapping + text list.
+        # JSON + instructions tokenize poorly (~2 chars/token).
+        # Full prompt = prompt_chars + batch_chars_per_batch (the JSON payload).
+        batch_chars = c_chars / num_batches
+        prompt_tokens_per_batch = (prompt_chars + batch_chars) / 2.0
 
-    return (total_input_tokens / 1_000_000) * input_price + (
+        total_input_tokens += content_tokens + (prompt_tokens_per_batch * num_batches)
+
+        # Vietnamese output: ~1.9 chars/token (diacritics expensive)
+        total_output_tokens += c_chars / 1.9
+
+    cost = (total_input_tokens / 1_000_000) * input_price + (
         total_output_tokens / 1_000_000
     ) * output_price
+
+    return cost
 
 
 def actual_gemini_cost(model: str | None = None) -> float:
