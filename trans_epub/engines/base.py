@@ -143,6 +143,8 @@ LLM_PROMPT = (
     "(thuần Việt, thoát ý).\n"
     "- Do not translate literally (word-for-word). Adapt English idioms, passive "
     "voice, and complex structures to natural Vietnamese phrasing.\n"
+    "- Return ONLY the Vietnamese translation for each paragraph — do NOT include "
+    "the original English text alongside the translation.\n"
     "- Maintain the tone, style, and flow of the original text across the paragraphs "
     "(they are in consecutive order).\n"
     f"- Some texts contain HTML emphasis tags ({_EMPHASIS_LIST}). "

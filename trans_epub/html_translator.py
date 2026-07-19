@@ -75,6 +75,9 @@ def _extract_text_with_emphasis(node: Tag) -> str:
 
     e.g. ``<p>Hello <em>world</em> <span class="x">!</span></p>``
          → ``"Hello <em>world</em> !"``
+
+    ``<br/>`` tags are preserved as ``\n`` so that line breaks in
+    headings and multi-line paragraphs are not lost before sending to the LLM.
     """
     parts: list[str] = []
     for child in node.children:
@@ -83,6 +86,8 @@ def _extract_text_with_emphasis(node: Tag) -> str:
         elif isinstance(child, Tag) and child.name in EMPHASIS_TAGS:
             inner = _extract_text_with_emphasis(child)
             parts.append(f"<{child.name}>{inner}</{child.name}>")
+        elif isinstance(child, Tag) and child.name == "br":
+            parts.append("\n")
         else:
             parts.append(child.get_text())
     return "".join(parts).strip()
