@@ -13,10 +13,12 @@ Translate EPUB books from English to Vietnamese using AI translation engines.
 
 - Multi-engine AI translation (6 engines)
 - Parallel processing with progress bars and char/token tracking
-- Smart caching — resume interrupted runs, skip already-translated chapters
-- Pronoun matrix / glossary injection for consistent character voices
-- Proactive rate limiting — stays under API RPM limits, avoids 429 errors
-- Configurable batching, threading, and creativity/temperature
+- Smart caching — resume interrupted runs, EPUB hash integrity check, atomic writes
+- HTML attribute translation — `alt`, `title`, `placeholder`, `aria-label`
+- Pronoun matrix / glossary injection with validation and match stats
+- Proactive rate limiting — stays under API RPM limits, configurable via `--rpm`
+- Configurable batching, threading, creativity/temperature, chapter timeout
+- Instant cancellation — Ctrl+C interrupts retry loops immediately
 
 ## Prerequisites
 
@@ -45,7 +47,7 @@ uv run trans-epub book.epub -e alibaba
 # Translate specific chapters
 uv run trans-epub book.epub -i 1-5
 
-# List chapters with their numbers
+# List chapters with char counts
 uv run trans-epub book.epub --list
 
 # Custom output path
@@ -62,6 +64,21 @@ uv run trans-epub book.epub -g glossary.toml
 
 # Fresh translation (ignore cache)
 uv run trans-epub book.epub --fresh
+
+# Dry-run: validate glossary, count chars, estimate cost, scan glossary matches
+uv run trans-epub book.epub --dry-run
+
+# Override API rate limit (paid tier)
+uv run trans-epub book.epub --rpm 60
+
+# Set per-chapter timeout (default: 600s)
+uv run trans-epub book.epub --chapter-timeout 300
+
+# Verbose per-request logging
+uv run trans-epub book.epub --verbose
+
+# Extra prompt instructions from file
+uv run trans-epub book.epub -p instructions.txt
 ```
 
 ## Configuration
@@ -138,9 +155,11 @@ See [.trans-epub/glossary.example.toml](.trans-epub/glossary.example.toml) for a
 
 ## Resume Capability
 
-Each translated chapter is cached in `{output}.cache.json`. The cache persists across runs:
+Each translated chapter is cached in `{output}.cache.json` with atomic writes:
 
-- **Normal run**: Uses cache to skip already-translated chapters — re-run the same command to resume from where you left off.
+- **Normal run**: Uses cache to skip already-translated chapters — re-run the same command to resume.
+- **EPUB hash check**: Warns if the source EPUB changed since cache was created.
+- **Corruption recovery**: Corrupted cache files are detected and replaced automatically.
 - **Fresh run**: `--fresh` ignores the cache and translates everything from scratch.
 - Cache is never automatically deleted — delete `output.epub.cache.json` manually if needed.
 
@@ -151,7 +170,9 @@ Each translated chapter is cached in `{output}.cache.json`. The cache persists a
 
 ## Known Issues / Limitations
 
-- **Attributes not translated**: `alt`, `title`, `placeholder` and other HTML attributes are silently skipped. Only visible text content is translated.
+- **LLM engines may hallucinate or invent content** at high creativity values. Stick to `--creativity 0.3-0.8` for faithful translation.
+- **Very large chapters** (30K+ chars) may hit API token limits especially with glossary + extra prompt. Split the EPUB into smaller sections or use `--chapter-timeout` to skip problematic chapters.
+- **Free tier rate limits**: Gemini free tier limits at 15 RPM. Use `--dry-run` to preview batch count and estimated minimum runtime.
 
 ## License
 
