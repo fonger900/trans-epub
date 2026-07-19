@@ -59,6 +59,10 @@ def main(argv: list[str] | None = None) -> int:
         "-i",
         help="Spine item numbers to translate, e.g. 1,3,5 or 2-6 or 1,3-5,8 (see --list)",
     )
+    parser.add_argument(
+        "--retranslate",
+        help="Spine item numbers to re-translate even if cached, e.g. 1,3 or 2-4",
+    )
     parser.add_argument("--list", "-l", action="store_true", help="List spine items with character counts")
     parser.add_argument(
         "--threads",
@@ -130,6 +134,16 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 only.add(int(part))
 
+    retranslate: set[int] | None = None
+    if args.retranslate:
+        retranslate = set()
+        for part in args.retranslate.split(","):
+            if "-" in part:
+                a, b = part.split("-", 1)
+                retranslate.update(range(int(a), int(b) + 1))
+            else:
+                retranslate.add(int(part))
+
     engine = resolve_engine(args.engine)
 
     # Resolve extra prompt: explicit --prompt flag or auto-detect
@@ -155,5 +169,6 @@ def main(argv: list[str] | None = None) -> int:
         rpm=args.rpm,
         chapter_timeout=args.chapter_timeout,
         extra_prompt=extra_prompt,
+        retranslate_items=retranslate,
     )
     return 0

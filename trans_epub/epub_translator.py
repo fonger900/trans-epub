@@ -135,7 +135,10 @@ def _save_cache(cache_path: Path, cache: dict[str, str], input_path: str) -> Non
 
 
 def _scan_chapters(
-    work_items: list[tuple[int, epub.EpubItem]], cache: dict[str, str], fresh: bool
+    work_items: list[tuple[int, epub.EpubItem]],
+    cache: dict[str, str],
+    fresh: bool,
+    retranslate: set[int] | None = None,
 ) -> list[dict[str, Any]]:
     """Scan chapters to pre-calculate metrics and cache statuses.
 
@@ -162,7 +165,8 @@ def _scan_chapters(
         char_count = sum(len(_extract_text_with_emphasis(n)) for n in nodes)
         char_count += sum(len(val) for _, _, val in attrs)
 
-        is_cached = name in cache and not fresh
+        is_retranslate = bool(retranslate and i in retranslate)
+        is_cached = name in cache and not fresh and not is_retranslate
 
         jobs.append(
             {
@@ -383,6 +387,7 @@ def translate_epub(
     verbose: bool = False,
     rpm: int | None = None,
     chapter_timeout: int = 600,
+    retranslate_items: set[int] | None = None,
     extra_prompt: str = "",
 ) -> None:
     """Translate *input_path* from English to Vietnamese and write *output_path*."""
@@ -454,7 +459,7 @@ def translate_epub(
 
     # Compile jobs in a single pass, sort by size descending
     # so large chapters start first and run in parallel from the start.
-    jobs = _scan_chapters(work_items, cache, fresh)
+    jobs = _scan_chapters(work_items, cache, fresh, retranslate_items)
     jobs.sort(key=lambda j: j["char_count"], reverse=True)
     _print_book_info(
         len(items), engine, threads, jobs, glossary=glossary, extra_prompt=extra_prompt
