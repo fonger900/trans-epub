@@ -54,6 +54,8 @@ _GEMINI_PRICING: dict[str, tuple[float, float]] = {
 _token_lock = threading.Lock()
 _prompt_tokens: int = 0
 _output_tokens: int = 0
+_api_calls: int = 0
+_input_chars: int = 0
 
 
 def _accumulate_usage(body: dict[str, Any]) -> None:
@@ -67,18 +69,43 @@ def _accumulate_usage(body: dict[str, Any]) -> None:
         _output_tokens += usage.get("candidatesTokenCount", 0)
 
 
+def _track_api_call(chars: int) -> None:
+    """Track one API call with character count of the input."""
+    global _api_calls, _input_chars
+    with _token_lock:
+        _api_calls += 1
+        _input_chars += chars
+
+
 def get_gemini_usage() -> tuple[int, int]:
     """Return accumulated (prompt_tokens, output_tokens)."""
     with _token_lock:
         return (_prompt_tokens, _output_tokens)
 
 
+def get_gemini_stats() -> dict[str, int | float]:
+    """Return detailed usage stats for post-run analysis."""
+    with _token_lock:
+        total = _prompt_tokens + _output_tokens
+        return {
+            "prompt_tokens": _prompt_tokens,
+            "output_tokens": _output_tokens,
+            "total_tokens": total,
+            "api_calls": _api_calls,
+            "input_chars": _input_chars,
+            "tokens_per_char": total / _input_chars if _input_chars > 0 else 0.0,
+            "avg_tokens_per_call": total / _api_calls if _api_calls > 0 else 0.0,
+        }
+
+
 def reset_gemini_usage() -> None:
     """Reset token counters (call at start of each translation run)."""
-    global _prompt_tokens, _output_tokens
+    global _prompt_tokens, _output_tokens, _api_calls, _input_chars
     with _token_lock:
         _prompt_tokens = 0
         _output_tokens = 0
+        _api_calls = 0
+        _input_chars = 0
 
 
 def _resolve_pricing(model: str) -> tuple[float, float]:
@@ -180,8 +207,10 @@ def gemini_translate(
     prompt = build_prompt(glossary, extra_prompt) + json.dumps(
         {"texts": texts}, ensure_ascii=False
     )
+    prompt_len = len(prompt)
 
     def do_request():
+        _track_api_call(prompt_len)
         return http_session.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent?key={key}",

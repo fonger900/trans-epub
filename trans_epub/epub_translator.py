@@ -291,21 +291,40 @@ def _print_results(
 ) -> None:
     """Print final summary, cost, and failure details[cite: 3]."""
     if engine == "gemini":
-        from .engines.gemini import actual_gemini_cost, get_gemini_usage
+        from .engines.gemini import actual_gemini_cost, get_gemini_stats
 
         cost = actual_gemini_cost()
-        prompt_tok, output_tok = get_gemini_usage()
+        stats = get_gemini_stats()
+        prompt_tok = stats["prompt_tokens"]
+        output_tok = stats["output_tokens"]
+        total_tok = stats["total_tokens"]
         if cost > 0:
             console.print(
                 f"[bold]Cost:[/bold] ${cost:.4f}  "
                 f"([dim]{prompt_tok:,} in + {output_tok:,} out = "
-                f"{prompt_tok + output_tok:,} tokens[/dim])"
+                f"{total_tok:,} tokens[/dim])"
             )
-        elif prompt_tok + output_tok > 0:
+        elif total_tok > 0:
             console.print(
                 f"[bold]Cost:[/bold] [green]free[/green]  "
                 f"([dim]{prompt_tok:,} in + {output_tok:,} out = "
-                f"{prompt_tok + output_tok:,} tokens[/dim])"
+                f"{total_tok:,} tokens[/dim])"
+            )
+        if total_chars > 0 and total_tok > 0:
+            ratio = stats["tokens_per_char"]
+            avg_call = stats["avg_tokens_per_call"]
+            calls = stats["api_calls"]
+            input_pct = prompt_tok / total_tok * 100 if total_tok else 0
+            console.print(
+                f"\n[bold]Token analysis[/bold] [dim](use for future estimates)[/dim]:"
+            )
+            console.print(
+                f"  Tokens per char: [bold]{ratio:.2f}[/bold]"
+                f"  |  API calls: {calls}"
+            )
+            console.print(
+                f"  Avg tokens/call: {avg_call:,.0f}"
+                f"  |  Split: {input_pct:.0f}% in / {100 - input_pct:.0f}% out"
             )
 
     console.print(
