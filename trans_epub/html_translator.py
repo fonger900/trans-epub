@@ -215,7 +215,7 @@ def translate_html(
     total_batches = len(batches)
 
     # ── Translate each batch ──────────────────────────────────────────────────
-    def translate_batch(batch_texts: list[str]) -> list[str]:
+    def translate_batch(batch_texts: list[str], _retried: bool = False) -> list[str]:
         try:
             result = cfg.translate(
                 batch_texts,
@@ -225,9 +225,16 @@ def translate_html(
             )
             if len(result) == len(batch_texts):
                 return result
-            # Mismatched count — split and retry
+            # Mismatched count — call_with_retry doesn't catch this (it's not
+            # an HTTP/parse error), so retry once at the SAME size before
+            # falling back to split. A single dropped/extra array item is
+            # often a one-off glitch; splitting immediately turns it into a
+            # cascade of extra API calls that each resend the full glossary
+            # and system prompt.
+            if not _retried and len(batch_texts) > 1:
+                return translate_batch(batch_texts, _retried=True)
         except Exception:
-            # API failure (400, JSON parse, etc.) — split and retry
+            # Already exhausted call_with_retry's internal retries — split.
             pass
 
         if len(batch_texts) == 1:

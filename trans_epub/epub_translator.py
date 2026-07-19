@@ -162,6 +162,7 @@ def _scan_chapters(
         attrs = _collect_translatable_attributes(soup, nodes)
         char_count = sum(len(_extract_text_with_emphasis(n)) for n in nodes)
         char_count += sum(len(val) for _, _, val in attrs)
+        elem_count = len(nodes) + len(attrs)
 
         is_retranslate = bool(retranslate and i in retranslate)
         is_cached = name in cache and not fresh and not is_retranslate
@@ -172,6 +173,7 @@ def _scan_chapters(
                 "item": item,
                 "name": name,
                 "char_count": char_count,
+                "elem_count": elem_count,
                 "is_cached": is_cached,
                 "cached_content": cache.get(name) if is_cached else None,
                 "_soup": soup,
@@ -194,6 +196,7 @@ def _print_book_info(
     total_chars = sum(j["char_count"] for j in jobs)
     cached_chars = sum(j["char_count"] for j in jobs if j["is_cached"])
     pending_chapters = [j["char_count"] for j in jobs if not j["is_cached"]]
+    pending_elems = [j["elem_count"] for j in jobs if not j["is_cached"]]
     total_pending = sum(pending_chapters)
 
     console.print(
@@ -212,15 +215,8 @@ def _print_book_info(
         from .engines.gemini import estimate_gemini_cost
 
         prompt_chars = len(build_prompt(glossary, extra_prompt))
-        # Compute average chars per element from scanned nodes
-        total_elems = sum(
-            len(j.get("_nodes", [])) for j in jobs if not j["is_cached"]
-        )
-        avg_elem = (
-            total_pending / total_elems if total_elems > 0 else 200
-        )
         est = estimate_gemini_cost(
-            pending_chapters, prompt_chars=prompt_chars, avg_element_chars=avg_elem
+            pending_chapters, prompt_chars=prompt_chars, elem_counts=pending_elems
         )
         if est > 0:
             console.print(f"[bold]Est. cost:[/bold] ${est:.4f}")
@@ -433,6 +429,7 @@ def translate_epub(
     dry_run: bool = False,
     verbose: bool = False,
     rpm: int | None = None,
+    elem_limit: int | None = None,
     chapter_timeout: int = 600,
     retranslate_items: set[int] | None = None,
     extra_prompt: str = "",
@@ -447,6 +444,13 @@ def translate_epub(
             ENGINES[engine].limiter = RateLimiter(rpm=rpm)
             if verbose:
                 console.print(f"[dim]Rate limit: {rpm} RPM[/dim]")
+    if elem_limit is not None:
+        from .engines.base import ENGINES
+
+        if engine in ENGINES:
+            ENGINES[engine].elem_limit = elem_limit
+            if verbose:
+                console.print(f"[dim]Elem limit: {elem_limit}[/dim]")
     cache_path = Path(output_path + ".cache.json")
     cache: dict[str, str] = _load_cache(cache_path, input_path, fresh)
 
@@ -515,20 +519,15 @@ def translate_epub(
     if dry_run:
         # Cost estimate (repeated here for clarity, also in book info above)
         pending_chapters = [j["char_count"] for j in jobs if not j["is_cached"]]
+        pending_elems = [j["elem_count"] for j in jobs if not j["is_cached"]]
         total_pending = sum(pending_chapters)
         if engine == "gemini" and total_pending > 0:
             from .engines.base import build_prompt
             from .engines.gemini import estimate_gemini_cost
 
             prompt_chars = len(build_prompt(glossary, extra_prompt))
-            total_elems = sum(
-                len(j.get("_nodes", [])) for j in jobs if not j["is_cached"]
-            )
-            avg_elem = (
-                total_pending / total_elems if total_elems > 0 else 200
-            )
             est = estimate_gemini_cost(
-                pending_chapters, prompt_chars=prompt_chars, avg_element_chars=avg_elem
+                pending_chapters, prompt_chars=prompt_chars, elem_counts=pending_elems
             )
             console.print(
                 f"\n[bold]Estimated cost:[/bold] ${est:.4f}"

@@ -113,6 +113,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Override API rate limit (requests per minute). Free tiers: 10-15. Paid: higher.",
     )
     parser.add_argument(
+        "--elem-limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Override max elements per translation batch (engine default, e.g. gemini: 50). "
+        "Higher = fewer batches = less repeated glossary/prompt overhead, at the cost of "
+        "a bigger blast radius if the model mismatches array length on a batch.",
+    )
+    parser.add_argument(
         "--chapter-timeout",
         type=int,
         default=600,
@@ -172,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         dry_run=args.dry_run,
         verbose=args.verbose,
         rpm=args.rpm,
+        elem_limit=args.elem_limit,
         chapter_timeout=args.chapter_timeout,
         extra_prompt=extra_prompt,
         retranslate_items=retranslate,

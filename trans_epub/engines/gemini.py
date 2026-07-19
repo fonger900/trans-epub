@@ -122,46 +122,58 @@ def estimate_gemini_cost(
     chars: int | list[int],
     model: str | None = None,
     prompt_chars: int = 0,
-    avg_element_chars: float = 200.0,
+    elem_counts: int | list[int] | None = None,
 ) -> float:
     """Estimate USD cost for translating English text to Vietnamese.
 
     Rough estimate. Actual cost varies with glossary size, extra prompt,
-    creativity, retries, and elem_limit splitting.
-    Use --verbose to see real token usage after run for calibration.
+    creativity, retries/splits on parse failures, and real batch packing.
+    Use --verbose to see real token usage after run.
 
-    avg_element_chars: estimated average chars per translatable element.
-    Used with elem_limit=50 to compute effective batch size.
-    Default 200 means elem_limit has no effect (50×200 = 10K = char_limit).
-    Lower values (e.g. 80 for short dialogue) produce more batches.
+    *elem_counts*, if given, should align with *chars* (one entry per chapter)
+    and holds the number of translatable elements (nodes + attrs) in that
+    chapter. Batching is limited by whichever of char_limit / elem_limit
+    binds first, so omitting this can undercount batches (and thus the
+    per-batch system-prompt overhead) for chapters with many short elements.
     """
     model = model or os.environ.get("GEMINI_MODEL") or _DEFAULT_MODEL
     input_price, output_price = _resolve_pricing(model)
 
     chapters = [chars] if isinstance(chars, int) else chars
+    if elem_counts is None:
+        elem_counts_list: list[int] = [0] * len(chapters)
+    elif isinstance(elem_counts, int):
+        elem_counts_list = [elem_counts]
+    else:
+        elem_counts_list = elem_counts
 
-    ELEM_LIMIT = 50
-    char_limit = 10_000
-    # Effective batch size = min(char_limit, elem_limit × avg chars per element)
-    effective_batch = min(char_limit, ELEM_LIMIT * int(avg_element_chars))
-    effective_batch = max(1000, effective_batch)  # floor at 1K chars
-
+    elem_limit = ENGINES["gemini"].elem_limit if "gemini" in ENGINES else 50
+    batch_size = 10_000
     total_input_tokens = 0.0
     total_output_tokens = 0.0
 
-    for c_chars in chapters:
+    for c_chars, n_elems in zip(chapters, elem_counts_list):
         if c_chars == 0:
             continue
-        num_batches = max(1, int((c_chars + effective_batch - 1) // effective_batch))
+        batches_by_chars = max(1, (c_chars + batch_size - 1) // batch_size)
+        batches_by_elems = (
+            max(1, (n_elems + elem_limit - 1) // elem_limit) if n_elems else 1
+        )
+        num_batches = max(batches_by_chars, batches_by_elems)
 
-        # Full payload per batch: prompt text + JSON wrapping + content text.
-        # JSON + instructions tokenize poorly (~2 chars/token).
+        # Full prompt per batch = system prompt/glossary + JSON-wrapped text
+        # slice for that batch. JSON + instructions tokenize poorly
+        # (~2 chars/token). This already covers all content chars sent in
+        # that batch, so there is no separate "content tokens" term — adding
+        # one on top would double-count the same characters.
         batch_chars = c_chars / num_batches
         prompt_tokens_per_batch = (prompt_chars + batch_chars) / 2.0
 
         total_input_tokens += prompt_tokens_per_batch * num_batches
 
-        # Vietnamese output: ~1.9 chars/token (diacritics expensive)
+        # Vietnamese output: ~1.9 chars/token (diacritics expensive) — rough;
+        # actual ratio is often worse. Check --verbose "tokens per char" after
+        # a run to calibrate.
         total_output_tokens += c_chars / 1.9
 
     cost = (total_input_tokens / 1_000_000) * input_price + (
