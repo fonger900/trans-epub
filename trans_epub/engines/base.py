@@ -27,8 +27,20 @@ if TYPE_CHECKING:
 # ── Shared HTTP session ────────────────────────────────────────────────────────
 
 _VERBOSE = False
-_CURRENT_CHAPTER = ""  # set by process_chapter for error context
-_CURRENT_CHAPTER_INFO = ""  # extra info like batch number
+
+# Thread-local chapter context -- avoids cross-thread contamination when
+# multiple chapters are translated in parallel (threads > 1).
+_chapter_ctx = threading.local()
+
+
+def _get_current_chapter() -> str:
+    """Return current chapter name for the calling thread, or ''."""
+    return getattr(_chapter_ctx, "chapter", "")
+
+
+def _get_current_chapter_info() -> str:
+    """Return current chapter info for the calling thread, or ''."""
+    return getattr(_chapter_ctx, "info", "")
 
 # Cancellation support — allows Ctrl+C to interrupt retry loops immediately
 _cancel_event: threading.Event | None = None
@@ -58,16 +70,14 @@ def set_verbose(enabled: bool) -> None:
 
 
 def set_current_chapter(name: str) -> None:
-    """Set current chapter name for error context in retry messages."""
-    global _CURRENT_CHAPTER, _CURRENT_CHAPTER_INFO
-    _CURRENT_CHAPTER = name
-    _CURRENT_CHAPTER_INFO = ""
+    """Set current chapter name for error context in retry messages (thread-safe)."""
+    _chapter_ctx.chapter = name
+    _chapter_ctx.info = ""
 
 
 def set_current_chapter_info(info: str) -> None:
-    """Append extra context like batch number to the current chapter label."""
-    global _CURRENT_CHAPTER_INFO
-    _CURRENT_CHAPTER_INFO = info
+    """Append extra context like batch number to the current chapter label (thread-safe)."""
+    _chapter_ctx.info = info
 
 
 http_session = requests.Session()
@@ -263,8 +273,8 @@ def call_with_retry(
 
     # Build context label for retry messages
     def _ctx():
-        chapter = _CURRENT_CHAPTER
-        info = _CURRENT_CHAPTER_INFO
+        chapter = _get_current_chapter()
+        info = _get_current_chapter_info()
         if chapter and info:
             return f"{engine_name} | {chapter} | {info}"
         if chapter:

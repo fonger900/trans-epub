@@ -194,7 +194,3 @@ Each follows the same pattern:
 
 All six engines (gemini, deepseek, alibaba, google, deepl, azure) use the shared `call_with_retry` from `base.py` for retry + proactive rate limiting. LLM engines pass `ENGINES[name].limiter` to enforce per-engine RPM limits.
 
-## Known Issues
-
-### Attributes not translated
-HTML attributes like `alt`, `title`, `placeholder` are silently skipped. Only visible text content is translated.

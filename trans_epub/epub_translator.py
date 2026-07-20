@@ -692,19 +692,16 @@ def translate_epub(
                 for i, item in enumerate(items, 1):
                     if only_chapters and i not in only_chapters:
                         restore_skipped(i, item)
-                try:
-                    for future in as_completed(future_map, timeout=chapter_timeout):
-                        try:
-                            future.result()
-                        except KeyboardInterrupt:
-                            raise
-                        except Exception as e:
-                            failed.append((future_map[future], str(e)))
-                except TimeoutError:
-                    for future, name in future_map.items():
-                        if not future.done():
-                            future.cancel()
-                            failed.append((name, f"timed out after {chapter_timeout}s"))
+                for future in as_completed(future_map):
+                    name = future_map[future]
+                    try:
+                        future.result(timeout=chapter_timeout)
+                    except KeyboardInterrupt:
+                        raise
+                    except TimeoutError:
+                        failed.append((name, f"timed out after {chapter_timeout}s"))
+                    except Exception as e:
+                        failed.append((name, str(e)))
             else:
                 single_executor = ThreadPoolExecutor(max_workers=1)
                 for job in jobs:
