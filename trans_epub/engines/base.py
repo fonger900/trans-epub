@@ -42,6 +42,7 @@ def _get_current_chapter_info() -> str:
     """Return current chapter info for the calling thread, or ''."""
     return getattr(_chapter_ctx, "info", "")
 
+
 # Cancellation support — allows Ctrl+C to interrupt retry loops immediately
 _cancel_event: threading.Event | None = None
 
