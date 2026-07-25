@@ -20,7 +20,7 @@ TRANSLATE_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th"}
 BLOCK_TAGS = TRANSLATE_TAGS
 
 # Tags whose subtree should never be translated
-PRESERVE_TAGS = {"table", "style", "script"}
+PRESERVE_TAGS = {"style", "script"}
 
 # CSS classes whose subtree should never be translated
 PRESERVE_CLASSES = {"note", "footnote"}

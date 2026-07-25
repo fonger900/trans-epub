@@ -59,8 +59,8 @@ class TestPreserveBlocks:
 
         assert "VI[Hello world]" in result_str
         assert "VI[Another paragraph]" in result_str
+        assert "VI[Table cell]" in result_str
         assert "Do not translate this note." in result_str
-        assert "Table cell" in result_str
         assert "body { color: red; }" in result_str
 
 
@@ -215,8 +215,8 @@ class TestTagConstants:
         assert "td" in TRANSLATE_TAGS
 
     def test_preserve_tags(self):
-        assert "table" in PRESERVE_TAGS
         assert "style" in PRESERVE_TAGS
+        assert "script" in PRESERVE_TAGS
 
     def test_preserve_classes(self):
         assert "note" in PRESERVE_CLASSES

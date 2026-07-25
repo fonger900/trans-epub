@@ -246,14 +246,15 @@ class TestCountTranslatableChars:
         assert count_translatable_chars(html) == 10
 
     def test_nested_block_tags_excluded(self):
-        """Paragraphs inside tables/blocks should not be counted."""
+        """td/th content inside tables is now translated."""
         html = (
             b"<html><body>"
             b"<p>Count me</p>"
-            b"<table><tr><td>Skip table</td></tr></table>"
+            b"<table><tr><td>Table text</td></tr></table>"
             b"</body></html>"
         )
-        assert count_translatable_chars(html) == 8  # only "Count me"
+        # "Count me" (8) + "Table text" (10) = 18
+        assert count_translatable_chars(html) == 18
 
     def test_emphasis_tags_counted(self):
         html = b"<html><body><p>Hello <em>world</em></p></body></html>"
