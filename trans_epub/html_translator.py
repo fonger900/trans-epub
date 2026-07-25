@@ -265,6 +265,9 @@ def translate_html(
             progress_cb(i + 1, total_batches, sum(len(t) for t in batch))
 
     # ── Write back: separate node and attribute translations ────────────────
+    # HTML void elements — can't contain text, safe to preserve and re-append
+    _VOID_ELEMENTS = {"img", "br", "hr", "input", "source", "track", "embed"}
+
     node_translations: dict[int, str] = dict()
     attr_translations: dict[int, str] = dict()
     for trans, src in zip(translated_all, translated_sources):
@@ -277,12 +280,18 @@ def translate_html(
     for node_idx, translated in node_translations.items():
         node = nodes[node_idx]
         cleaned = _clean_translated(translated)
-        # Preserve non-text child elements (img, br, span, etc.)
-        # that are not emphasis tags — they would be lost on clear().
+        # Only preserve void elements and elements with translatable attrs.
+        # Other child elements (span, div, a, etc.) had their text
+        # extracted and translated already — don't re-append.
         preserved_children = [
             child
             for child in node.children
-            if isinstance(child, Tag) and child.name not in EMPHASIS_TAGS
+            if isinstance(child, Tag)
+            and child.name not in EMPHASIS_TAGS
+            and (
+                child.name in _VOID_ELEMENTS
+                or any(a in _ATTRS_TO_TRANSLATE for a in child.attrs)
+            )
         ]
         node.clear()
         if "<" in cleaned:
